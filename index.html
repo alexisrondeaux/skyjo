@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <meta name="theme-color" content="#0f3d2e">
 <meta name="robots" content="noindex">
-<title>Neuf Trous</title>
+<title>Albatros</title>
 <style>
 :root{
   --bg1:#0b2e22; --bg2:#17573f; --panel:rgba(255,255,255,.09); --ink:#f4efe2; --soft:rgba(244,239,226,.72);
@@ -54,6 +54,7 @@ button:disabled{opacity:.45;cursor:default}
 .card.red{color:var(--red)}
 .card .rk{font-size:40cqw}
 .card .su{font-size:34cqw;margin-top:4cqw}
+.card .jk{font-size:17cqw;margin-top:6cqw;letter-spacing:.05em}
 .card.back{background:#7a2230;border:4px solid var(--paper);background-image:repeating-linear-gradient(60deg,rgba(255,255,255,.14) 0 2px,transparent 2px 9px),repeating-linear-gradient(-60deg,rgba(255,255,255,.14) 0 2px,transparent 2px 9px)}
 .card.empty{background:rgba(0,0,0,.18);border:2px dashed var(--line);box-shadow:none}
 .card.pair{opacity:.55}
@@ -62,14 +63,14 @@ button:disabled{opacity:.45;cursor:default}
 .card.last::after{content:"";position:absolute;top:6%;right:8%;width:14%;aspect-ratio:1;border-radius:50%;background:var(--accent);box-shadow:0 0 0 1px rgba(0,0,0,.4)}
 @keyframes glow{0%,100%{outline-color:var(--accent)}50%{outline-color:transparent}}
 @media (prefers-reduced-motion:reduce){.card.hint{animation:none}}
-.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:7px}
 
-.opps{display:flex;gap:8px}
-.opp{flex:1;min-width:0;background:rgba(0,0,0,.2);border-radius:10px;padding:6px 8px;border:2px solid transparent}
+.opps{display:flex;gap:8px;flex-wrap:wrap}
+.opp{flex:1 1 28%;min-width:0;background:rgba(0,0,0,.2);border-radius:10px;padding:6px 8px;border:2px solid transparent}
 .opp.turn{border-color:var(--accent)}
 .opp .nm{display:flex;align-items:center;gap:5px;font-size:.9rem;font-weight:700;margin-bottom:5px}
 .opp .nm b{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.opp .grid{gap:4px;max-width:120px;margin:0 auto}
+.opp .grid{gap:3px;max-width:128px;margin:0 auto}
 .opp .card{box-shadow:0 1px 2px rgba(0,0,0,.4)}
 .opp .card.back{border-width:2px}
 
@@ -82,7 +83,7 @@ button:disabled{opacity:.45;cursor:default}
 .me{background:rgba(0,0,0,.2);border-radius:10px;padding:10px;border:2px solid transparent}
 .me.turn{border-color:var(--accent)}
 .me .hd{display:flex;justify-content:space-between;font-weight:700;margin-bottom:8px}
-.me .grid{max-width:min(260px,40dvh);margin:0 auto;gap:10px}
+.me .grid{max-width:min(300px,44dvh);margin:0 auto;gap:8px}
 
 table{width:100%;border-collapse:collapse;font-size:1rem}
 th,td{padding:5px 4px;text-align:center;border-bottom:1px solid var(--line)}
@@ -106,35 +107,38 @@ details li{margin-bottom:4px}
 <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
 
 <script id="engine">
-/* ================= MOTEUR DE JEU : Golf à 6 cartes, jeu de 52 cartes (aucune dépendance au navigateur) ================= */
+/* ================= MOTEUR DE JEU : Golf à 12 cartes, deux jeux de 52 cartes + 4 jokers (aucune dépendance au navigateur) ================= */
 const Engine = (() => {
-  const ROUNDS=9, CELLS=6, COLS=3;
-  const rank = c => c%13+1;                 // 1 = as ... 11 = valet, 12 = dame, 13 = roi
-  const value = c => { const r=rank(c); return r===13?0 : r===2?-2 : r>10?10 : r; };
+  const LIMIT=100, CELLS=12, COLS=4, PENALTY=10, MAXP=6;
+  const rank = c => { const k=c%54; return k>=52 ? 0 : k%13+1; };   // 0 = joker, 1 = as ... 11 = valet, 12 = dame, 13 = roi
+  const value = c => { const r=rank(c); return r===0?-2 : r===13?0 : r>10?10 : r; };
   function shuffle(a){ for(let i=a.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [a[i],a[j]]=[a[j],a[i]]; } return a; }
-  function makeDeck(){ const d=[]; for(let i=0;i<52;i++) d.push(i); return shuffle(d); }
-  function newGame(code){ return {code, phase:'lobby', players:[], deck:[], discard:[], turn:0, held:null, heldFrom:null,
+  function makeDeck(){ const d=[]; for(let i=0;i<108;i++) d.push(i); return shuffle(d); }
+  function newGame(code){ return {code, phase:'lobby', players:[], deck:[], discard:[], turn:0, held:null, heldFrom:null, mustFlip:false,
     closer:null, finalLeft:0, round:0, history:[], starter:0, last:null, msg:''}; }
   function addPlayer(s,id,name){ s.players.push({id, name:String(name||'Joueur').slice(0,14), connected:true, grid:[], total:0}); }
   function startRound(s){
-    s.round++; s.deck=makeDeck(); s.discard=[]; s.held=null; s.heldFrom=null; s.closer=null; s.finalLeft=0; s.last=null;
+    s.round++; s.deck=makeDeck(); s.discard=[]; s.held=null; s.heldFrom=null; s.mustFlip=false; s.closer=null; s.finalLeft=0; s.last=null;
     for(const p of s.players){ p.grid=[]; for(let i=0;i<CELLS;i++) p.grid.push({c:s.deck.pop(), up:false}); }
     s.discard.push(s.deck.pop()); s.starter=(s.round-1)%s.players.length; s.phase='setup'; s.msg='Chacun retourne 2 cartes';
   }
   const upCount = p => p.grid.filter(c=>c.up).length;
   const allUp   = p => p.grid.every(c=>c.up);
-  const paired  = (p,col) => { const a=p.grid[col], b=p.grid[col+COLS]; return a.up && b.up && rank(a.c)===rank(b.c); };
+  /* colonne annulée : 3 cartes visibles de même rang (les jokers ne s'annulent pas) */
+  const colDone = (p,col) => { const a=p.grid[col], b=p.grid[col+COLS], c=p.grid[col+2*COLS];
+    return a.up && b.up && c.up && rank(a.c)>0 && rank(a.c)===rank(b.c) && rank(b.c)===rank(c.c); };
   function score(p){ let t=0;
-    for(let col=0;col<COLS;col++){ if(paired(p,col)) continue; const a=p.grid[col], b=p.grid[col+COLS]; if(a.up) t+=value(a.c); if(b.up) t+=value(b.c); }
+    for(let col=0;col<COLS;col++){ if(colDone(p,col)) continue; for(let r=0;r<3;r++){ const c=p.grid[col+r*COLS]; if(c.up) t+=value(c.c); } }
     return t; }
   function endRound(s){
     for(const p of s.players) p.grid.forEach(c=>c.up=true);
-    const scores=s.players.map(score);
+    const raw=s.players.map(score), scores=raw.slice(), c=s.closer; let penalized=false;
+    if(c!=null && raw.some((v,i)=> i!==c && v<=raw[c])){ scores[c]+=PENALTY; penalized=true; }
     s.players.forEach((p,i)=> p.total+=scores[i]);
-    s.history.push({scores, closer:s.closer});
-    s.held=null; s.heldFrom=null; s.last=null;
-    s.phase = s.round>=ROUNDS ? 'gameOver' : 'roundEnd';
-    s.msg='Fin du trou '+s.round;
+    s.history.push({scores, closer:c, penalized});
+    s.held=null; s.heldFrom=null; s.mustFlip=false; s.last=null;
+    s.phase = s.players.some(p=>p.total>=LIMIT) ? 'gameOver' : 'roundEnd';
+    s.msg='Fin de la manche '+s.round;
   }
   function endTurn(s,pi){
     const p=s.players[pi];
@@ -151,9 +155,9 @@ const Engine = (() => {
     const p=s.players[t];
     if(s.phase==='setup'){ while(upCount(p)<2){ const i=p.grid.findIndex(c=>!c.up); if(act(s,t,{type:'flipInit',i})) break; } return null; }
     if(s.phase!=='play' || s.turn!==t) return 'Ce n\'est pas son tour';
-    if(s.held==null) act(s,t,{type:'drawDeck'});
+    if(s.held==null && !s.mustFlip) act(s,t,{type:'drawDeck'});
     let i=p.grid.findIndex(c=>!c.up); if(i<0) i=0;
-    return act(s,t,{type:'swap',i});
+    return act(s,t,{type: s.mustFlip?'flip':'swap', i});
   }
   function act(s,pi,a){
     const p=s.players[pi]; if(!p || !a) return 'Action invalide';
@@ -187,43 +191,48 @@ const Engine = (() => {
         return null; }
       case 'drawDeck':
         if(!myTurn) return 'Ce n\'est pas ton tour';
-        if(s.held!=null) return 'Tu as déjà pris une carte';
+        if(s.held!=null || s.mustFlip) return 'Tu as déjà pris une carte';
         s.held=draw(s); s.heldFrom='deck'; s.msg=p.name+' pioche'; return null;
       case 'takeDiscard':
         if(!myTurn) return 'Ce n\'est pas ton tour';
-        if(s.held!=null) return 'Tu as déjà pris une carte';
+        if(s.held!=null || s.mustFlip) return 'Tu as déjà pris une carte';
         if(!s.discard.length) return 'La défausse est vide';
         s.held=s.discard.pop(); s.heldFrom='discard'; s.msg=p.name+' prend la défausse'; return null;
       case 'swap': {
         if(!myTurn || s.held==null) return 'Prends d\'abord une carte';
         const c=cell(); if(!c) return 'Choisis une de tes cartes';
         s.discard.push(c.c); c.c=s.held; c.up=true; s.held=null; s.heldFrom=null; s.last={p:pi,i:a.i};
-        s.msg=p.name+' échange une carte'; if(paired(p,a.i%COLS)) s.msg=p.name+' forme une paire !';
+        s.msg=p.name+' échange une carte'; if(colDone(p,a.i%COLS)) s.msg=p.name+' annule une colonne !';
         endTurn(s,pi); return null; }
       case 'discardHeld':
         if(!myTurn || s.held==null) return 'Action impossible';
         if(s.heldFrom!=='deck') return 'Une carte prise à la défausse doit être échangée';
-        s.discard.push(s.held); s.held=null; s.heldFrom=null; s.last=null; s.msg=p.name+' défausse sa pioche';
-        endTurn(s,pi); return null;
+        s.discard.push(s.held); s.held=null; s.heldFrom=null; s.mustFlip=true; s.msg=p.name+' défausse et retourne une carte'; return null;
+      case 'flip': {
+        if(!myTurn || !s.mustFlip) return 'Action impossible';
+        const c=cell(); if(!c || c.up) return 'Choisis une carte cachée';
+        c.up=true; s.mustFlip=false; s.last={p:pi,i:a.i};
+        if(colDone(p,a.i%COLS)) s.msg=p.name+' annule une colonne !';
+        endTurn(s,pi); return null; }
     }
     return 'Action inconnue';
   }
   /* Vue envoyée aux joueurs : cartes cachées et pioche retirées, identifiants secrets retirés */
   function view(s){
-    return { code:s.code, phase:s.phase, turn:s.turn, held:s.held, heldFrom:s.heldFrom, closer:s.closer,
-      round:s.round, rounds:ROUNDS, history:s.history, last:s.last, msg:s.msg, deckCount:s.deck.length,
+    return { code:s.code, phase:s.phase, turn:s.turn, held:s.held, heldFrom:s.heldFrom, mustFlip:s.mustFlip, closer:s.closer,
+      round:s.round, history:s.history, last:s.last, msg:s.msg, deckCount:s.deck.length,
       discardTop: s.discard.length ? s.discard[s.discard.length-1] : null,
       players: s.players.map(p=>({ name:p.name, connected:p.connected, total:p.total, sum:p.grid.length?score(p):0, ups:upCount(p),
-        grid:p.grid.map((c,i)=>({ c:c.up?c.c:null, up:c.up, pair:paired(p,i%COLS) })) })) };
+        grid:p.grid.map((c,i)=>({ c:c.up?c.c:null, up:c.up, pair:colDone(p,i%COLS) })) })) };
   }
-  return {newGame, addPlayer, act, view, value, rank};
+  return {newGame, addPlayer, act, view, value, rank, MAXP};
 })();
 if(typeof module!=='undefined') module.exports=Engine;
 </script>
 
 <script>
 /* ================= RÉSEAU + INTERFACE ================= */
-const PREFIX='neuf-trous-v1-';
+const PREFIX='albatros-v2-';
 const $app=document.getElementById('app'), $toast=document.getElementById('toast');
 const store={ get(k){ try{ return JSON.parse(localStorage.getItem(k)); }catch(e){ return null; } },
               set(k,v){ try{ localStorage.setItem(k,JSON.stringify(v)); }catch(e){} },
@@ -297,7 +306,7 @@ function hostData(c,d){
         setTimeout(()=>{ if(old.alive) sendTo(c,{t:'dup'}); else accept(c,d); },1500);
       } else accept(c,d);
     } else if(S.phase!=='lobby'){ sendTo(c,{t:'refused',m:'La partie a déjà commencé'}); }
-    else if(S.players.length>=4){ sendTo(c,{t:'refused',m:'La salle est complète (4 joueurs)'}); }
+    else if(S.players.length>=Engine.MAXP){ sendTo(c,{t:'refused',m:'La salle est complète ('+Engine.MAXP+' joueurs)'}); }
     else { Engine.addPlayer(S,d.pid,d.name); accept(c,d); }
     return;
   }
@@ -317,7 +326,7 @@ function hostDrop(c){
   if(pl && pl.connected){ pl.connected=false; broadcast(); }
 }
 function broadcast(){
-  store.set('golf.host.'+code,S);
+  store.set('golf2.host.'+code,S);
   V=Engine.view(S); me=0;
   S.players.forEach((p,i)=>{ if(i>0){ const e=conns.get(p.id); if(e) sendTo(e.conn,{t:'state',s:V,you:i}); } });
   render();
@@ -381,7 +390,7 @@ setInterval(()=>{
 document.addEventListener('visibilitychange',()=>{ if(!document.hidden){ lastTry=0; if(role==='host' && peer && peer.disconnected && !peer.destroyed){ try{ peer.reconnect(); }catch(e){} } } });
 
 function leave(silent){
-  if(role==='host') store.del('golf.host.'+code);
+  if(role==='host') store.del('golf2.host.'+code);
   tabCode.set(''); role=null; S=null; V=null; conns.clear(); showScores=false;
   try{ if(peer) peer.destroy(); }catch(e){} peer=null; conn=null; setUrl(''); code=''; render();
 }
@@ -394,31 +403,33 @@ function send(a){
 const RANKS=['A','2','3','4','5','6','7','8','9','10','V','D','R'], SUITS=['♠','♥','♦','♣'];
 function cardHtml(c,extra,attrs){
   if(!c.up || c.c==null) return `<div class="card back ${extra||''}" ${attrs||''}></div>`;
-  const s=Math.floor(c.c/13);
-  return `<div class="card ${s===1||s===2?'red':''} ${c.pair?'pair':''} ${extra||''}" ${attrs||''}><span class="rk">${RANKS[c.c%13]}</span><span class="su">${SUITS[s]}</span></div>`;
+  const k=c.c%54;
+  if(k>=52) return `<div class="card ${k===53?'red':''} ${extra||''}" ${attrs||''}><span class="rk">★</span><span class="jk">JOKER</span></div>`;
+  const s=Math.floor(k/13);
+  return `<div class="card ${s===1||s===2?'red':''} ${c.pair?'pair':''} ${extra||''}" ${attrs||''}><span class="rk">${RANKS[k%13]}</span><span class="su">${SUITS[s]}</span></div>`;
 }
 function scoresTable(){
   const ps=V.players, best=Math.min(...ps.map(p=>p.total));
   let h=`<table><tr><th></th>${ps.map(p=>`<th>${esc(p.name)}</th>`).join('')}</tr>`;
-  V.history.forEach((r,k)=>{ h+=`<tr><td>Trou ${k+1}</td>${r.scores.map((s,i)=>`<td>${s}${i===r.closer?' ★':''}</td>`).join('')}</tr>`; });
+  V.history.forEach((r,k)=>{ h+=`<tr><td>Manche ${k+1}</td>${r.scores.map((s,i)=>`<td>${s}${i===r.closer?(r.penalized?' <span class="tag">+10</span>':' ★'):''}</td>`).join('')}</tr>`; });
   h+=`<tr class="tot"><td>Total</td>${ps.map(p=>`<td class="${p.total===best&&V.history.length?'best':''}">${p.total}</td>`).join('')}</tr></table>`;
-  if(!V.history.length) h+=`<p class="muted center">Aucun trou terminé pour l'instant.</p>`;
-  else h+=`<p class="muted">★ joueur qui a retourné toutes ses cartes en premier.</p>`;
+  if(!V.history.length) h+=`<p class="muted center">Aucune manche terminée pour l'instant.</p>`;
+  else h+=`<p class="muted">★ joueur qui a terminé la manche. +10 : pénalité car il n'avait pas strictement le plus petit score.</p>`;
   return h;
 }
 const RULES=`<details><summary>Règles du jeu</summary><ul>
-<li>Le Golf se joue avec un jeu de 52 cartes. Chacun reçoit 6 cartes cachées (2 rangées de 3) et en retourne 2. Le but : avoir le moins de points possible.</li>
-<li>À ton tour : prends la carte de la défausse (échange obligatoire avec une de tes cartes), ou pioche. Une carte piochée peut être échangée avec une de tes cartes, ou jetée : ton tour s'arrête alors.</li>
-<li>Valeurs : as 1, cartes de 3 à 10 leur valeur, valet et dame 10, roi 0, et le 2 vaut -2.</li>
-<li>Deux cartes de même rang l'une au-dessus de l'autre s'annulent : la colonne vaut 0.</li>
-<li>Quand un joueur a retourné toutes ses cartes, les autres jouent un dernier tour, puis tout est révélé.</li>
-<li>La partie se joue en 9 trous (manches). Le plus petit total gagne.</li></ul></details>`;
+<li>Albatros est un Golf aux cartes, joué avec deux jeux de 52 cartes et 4 jokers. Chacun reçoit 12 cartes cachées (3 rangées de 4) et en retourne 2. Le but : avoir le moins de points possible.</li>
+<li>À ton tour : prends la carte de la défausse (échange obligatoire avec une de tes cartes), ou pioche. Une carte piochée peut être échangée, ou jetée : tu retournes alors une de tes cartes cachées.</li>
+<li>Valeurs : as 1, cartes de 2 à 10 leur valeur, valet et dame 10, roi 0, joker -2.</li>
+<li>Trois cartes de même rang dans une colonne s'annulent : la colonne vaut 0 (sauf les jokers, qui gardent leur valeur).</li>
+<li>Quand un joueur a retourné toutes ses cartes, les autres jouent un dernier tour, puis tout est révélé. Si ce joueur n'a pas strictement le plus petit score de la manche, il prend 10 points de pénalité.</li>
+<li>La partie s'arrête dès qu'un joueur atteint 100 points. Le plus petit total gagne.</li></ul></details>`;
 
 function render(){
   let h='';
   if(!role){
     const c=urlCode();
-    h=`<h1>Neuf Trous<small>le Golf aux cartes, chacun sur son téléphone</small></h1>
+    h=`<h1>Albatros<small>un Golf aux cartes, chacun sur son téléphone</small></h1>
     <div class="panel stack"><div><label>Ton pseudo</label><input id="name" maxlength="14" value="${esc(myName)}" placeholder="Pseudo" autocomplete="off"></div></div>
     <div class="panel stack"><h2>Rejoindre une partie</h2>
       <div class="row"><input id="code" class="code" maxlength="4" value="${esc(c)}" placeholder="CODE" autocomplete="off" autocapitalize="characters"><button data-act="join">Rejoindre</button></div></div>
@@ -426,7 +437,7 @@ function render(){
     <button data-act="create">Créer une partie</button>
     <div class="panel">${RULES}</div>`;
   } else if(!V){
-    h=`<h1>Neuf Trous</h1><div class="panel stack center"><div class="bigcode">${esc(code)}</div><div>${esc(netMsg)}</div>
+    h=`<h1>Albatros</h1><div class="panel stack center"><div class="bigcode">${esc(code)}</div><div>${esc(netMsg)}</div>
       <div class="muted">L'hôte doit garder la page ouverte sur son téléphone.</div><button class="ghost" data-act="leave">Annuler</button></div>`;
   } else if(V.phase==='lobby'){
     const n=V.players.length;
@@ -434,7 +445,7 @@ function render(){
     ${netOk?'':`<div class="net">${role==='host'?'Connexion au serveur...':esc(netMsg)}</div>`}
     <div class="panel stack center"><div class="muted">Code de la partie</div><div class="bigcode">${esc(V.code)}</div>
       <button data-act="share">Partager le lien d'invitation</button></div>
-    <div class="panel stack"><h2>Joueurs (${n}/4)</h2><ul class="plist">${V.players.map((p,i)=>`<li><span class="dot ${p.connected?'':'off'}"></span><span class="grow">${esc(p.name)}</span>${i===0?'<span class="tag">hôte</span>':''}${i===me?'<span class="tag">toi</span>':''}${role==='host'&&i>0?`<button class="ghost small" style="flex:none" data-act="kick" data-i="${i}">Retirer</button>`:''}</li>`).join('')}</ul>
+    <div class="panel stack"><h2>Joueurs (${n}/${Engine.MAXP})</h2><ul class="plist">${V.players.map((p,i)=>`<li><span class="dot ${p.connected?'':'off'}"></span><span class="grow">${esc(p.name)}</span>${i===0?'<span class="tag">hôte</span>':''}${i===me?'<span class="tag">toi</span>':''}${role==='host'&&i>0?`<button class="ghost small" style="flex:none" data-act="kick" data-i="${i}">Retirer</button>`:''}</li>`).join('')}</ul>
       ${role==='host'?`<button data-act="start" ${n<2?'disabled':''}>${n<2?'En attente de joueurs...':'Lancer la partie'}</button>`:`<div class="muted center">En attente du lancement par l'hôte...</div>`}</div>
     <div class="panel">${RULES}</div>`;
   } else h=gameHtml();
@@ -445,7 +456,7 @@ function render(){
 function gameHtml(){
   const ps=V.players, my=ps[me], cur=ps[V.turn], playing=V.phase==='play', setup=V.phase==='setup', over=V.phase==='roundEnd'||V.phase==='gameOver';
   const myTurn=playing && V.turn===me, held=V.held!=null;
-  let h=`<div class="top"><div class="grow">Trou ${V.round}/${V.rounds} <span class="muted">· ${esc(V.code)}</span></div>
+  let h=`<div class="top"><div class="grow">Manche ${V.round} <span class="muted">· ${esc(V.code)}</span></div>
     <button class="ghost small" data-act="scores">Scores</button><button class="ghost small" data-act="leave">Quitter</button></div>`;
   if(!netOk) h+=`<div class="net">${role==='host'?'Reconnexion au serveur...':esc(netMsg)}</div>`;
   h+=`<div class="opps">`;
@@ -455,13 +466,14 @@ function gameHtml(){
       <div class="muted center">Total ${p.total}</div></div>`; });
   h+=`</div>`;
   if(over){
-    const best=Math.min(...ps.map(p=>p.total));
+    const r=V.history[V.history.length-1], best=Math.min(...ps.map(p=>p.total));
     const winners=ps.filter(p=>p.total===best).map(p=>p.name);
-    h+=`<div class="panel stack"><h2>${V.phase==='gameOver'?'Partie terminée : '+esc(winners.join(' et '))+(winners.length>1?' gagnent !':' gagne !'):'Fin du trou '+V.round}</h2>
+    h+=`<div class="panel stack"><h2>${V.phase==='gameOver'?'Partie terminée : '+esc(winners.join(' et '))+(winners.length>1?' gagnent !':' gagne !'):'Fin de la manche '+V.round}</h2>
+      ${r&&r.penalized?`<div class="muted">${esc(ps[r.closer].name)} a terminé sans avoir le plus petit score : 10 points de pénalité.</div>`:''}
       ${scoresTable()}
-      ${role==='host'?`<button data-act="${V.phase==='gameOver'?'again':'next'}">${V.phase==='gameOver'?'Nouvelle partie':'Trou suivant'}</button>`:`<div class="muted center">En attente de l'hôte...</div>`}</div>`;
+      ${role==='host'?`<button data-act="${V.phase==='gameOver'?'again':'next'}">${V.phase==='gameOver'?'Nouvelle partie':'Manche suivante'}</button>`:`<div class="muted center">En attente de l'hôte...</div>`}</div>`;
   } else {
-    const canDraw=myTurn&&!held, canDiscard=myTurn&&held&&V.heldFrom==='deck';
+    const canDraw=myTurn&&!held&&!V.mustFlip, canDiscard=myTurn&&held&&V.heldFrom==='deck';
     h+=`<div class="piles">
       <div class="pile"><div class="card back ${canDraw?'tap hint':''}" data-act="deck"></div><div class="lbl">Pioche (${V.deckCount})</div></div>
       <div class="pile">${V.discardTop==null?`<div class="card empty ${canDiscard?'tap hint':''}" data-act="discard"></div>`:cardHtml({c:V.discardTop,up:true},(canDraw||canDiscard)?'tap hint':'','data-act="discard"')}<div class="lbl">${canDiscard?'Jeter ici':'Défausse'}</div></div>
@@ -470,7 +482,8 @@ function gameHtml(){
     let st='', sub=V.closer!=null?`Dernier tour ! ${esc(ps[V.closer].name)} a tout retourné.`:'', mine=false;
     if(setup){ if(my.ups<2){ st=`Retourne ${2-my.ups} carte${my.ups?'':'s'} de ton jeu`; mine=true; } else st='En attente des autres joueurs...'; }
     else if(myTurn){ mine=true;
-      if(!held) st='À toi ! Pioche ou prends la défausse';
+      if(V.mustFlip) st='Retourne une de tes cartes cachées';
+      else if(!held) st='À toi ! Pioche ou prends la défausse';
       else if(V.heldFrom==='discard') st='Touche la carte à remplacer';
       else st='Remplace une de tes cartes, ou jette-la sur la défausse';
     } else { st=`Au tour de ${esc(cur.name)}`; if(!sub) sub=esc(V.msg||''); }
@@ -484,7 +497,7 @@ function gameHtml(){
   h+=`<div class="me ${myTurn?'turn':''}"><div class="hd"><span>${esc(my.name)} (toi)</span><span>Visible ${my.sum} · Total ${my.total}</span></div><div class="grid">`;
   my.grid.forEach((c,k)=>{
     let hint=false;
-    if(!over){ if(tapSetup) hint=!c.up; else if(myTurn&&held) hint=true; }
+    if(!over){ if(tapSetup) hint=!c.up; else if(myTurn){ if(V.mustFlip) hint=!c.up; else if(held) hint=true; } }
     h+=cardHtml(c,(hint?'tap hint ':'')+(V.last&&V.last.p===me&&V.last.i===k&&!over?'last':''),`data-act="card" data-i="${k}"`);
   });
   h+=`</div></div>`;
@@ -502,20 +515,20 @@ $app.addEventListener('click',ev=>{
     case 'create': if(readName()) hostStart(newCode()); break;
     case 'join': { if(!readName()) break; const c=(document.getElementById('code').value||'').toUpperCase().replace(/[^A-Z]/g,'');
       if(c.length!==4){ toast('Le code fait 4 lettres'); break; }
-      const saved=store.get('golf.host.'+c); if(saved && saved.players && saved.players[0]) hostStart(c,saved); else clientStart(c); break; }
+      const saved=store.get('golf2.host.'+c); if(saved && saved.players && saved.players[0]) hostStart(c,saved); else clientStart(c); break; }
     case 'leave': if(!V || V.phase==='lobby' || el.dataset.sure){ leave(); } else { el.dataset.sure=1; el.textContent='Confirmer ?'; } break;
-    case 'share': { const u=shareUrl(), txt='Rejoins ma partie de Neuf Trous (code '+code+')';
-      if(navigator.share){ navigator.share({title:'Neuf Trous',text:txt,url:u}).catch(()=>{}); }
+    case 'share': { const u=shareUrl(), txt='Rejoins ma partie de Albatros (code '+code+')';
+      if(navigator.share){ navigator.share({title:'Albatros',text:txt,url:u}).catch(()=>{}); }
       else if(navigator.clipboard){ navigator.clipboard.writeText(u).then(()=>toast('Lien copié'),()=>toast(u)); } else toast(u); break; }
     case 'kick': hostKick(i); break;
     case 'start': case 'next': case 'again': send({type:a}); break;
     case 'auto': send({type:'auto',i}); break;
     case 'scores': showScores=true; render(); break;
-    case 'deck': if(V.phase==='play'&&V.turn===me&&V.held==null) send({type:'drawDeck'}); break;
-    case 'discard': if(V.phase==='play'&&V.turn===me){ if(V.held==null) send({type:'takeDiscard'}); else if(V.heldFrom==='deck') send({type:'discardHeld'}); } break;
+    case 'deck': if(V.phase==='play'&&V.turn===me&&V.held==null&&!V.mustFlip) send({type:'drawDeck'}); break;
+    case 'discard': if(V.phase==='play'&&V.turn===me){ if(V.held==null&&!V.mustFlip) send({type:'takeDiscard'}); else if(V.held!=null&&V.heldFrom==='deck') send({type:'discardHeld'}); } break;
     case 'card':
       if(V.phase==='setup') send({type:'flipInit',i});
-      else if(V.phase==='play'&&V.turn===me){ if(V.held!=null) send({type:'swap',i}); else toast('Prends d\'abord la pioche ou la défausse'); }
+      else if(V.phase==='play'&&V.turn===me){ if(V.held!=null) send({type:'swap',i}); else if(V.mustFlip) send({type:'flip',i}); else toast('Prends d\'abord la pioche ou la défausse'); }
       break;
   }
 });
@@ -525,7 +538,7 @@ document.addEventListener('keydown',ev=>{ if(ev.key==='Enter' && !role){ const b
 (function boot(){
   const c=urlCode(), mark=tabCode.get()||''; // la reprise automatique ne vaut que pour l'onglet qui jouait déjà
   if(c && mark.split(':')[0]===c && myName && typeof Peer!=='undefined'){
-    if(mark.split(':')[1]==='host'){ const saved=store.get('golf.host.'+c); if(saved && saved.players && saved.players[0]){ hostStart(c,saved); return; } }
+    if(mark.split(':')[1]==='host'){ const saved=store.get('golf2.host.'+c); if(saved && saved.players && saved.players[0]){ hostStart(c,saved); return; } }
     else { clientStart(c); return; }
   }
   render();
