@@ -128,6 +128,13 @@ details li{margin-bottom:4px}
 <div id="toast"></div>
 
 <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script>
+/* Configuration du projet Firebase (publique par nature). Tant qu'elle vaut null, profils et stats restent sur le téléphone. */
+const FIREBASE_CONFIG=null;
+</script>
 
 <script id="engine">
 /* ================= MOTEUR DE JEU : Golf à 12 cartes, trois jeux de 52 cartes + 6 jokers (aucune dépendance au navigateur) ================= */
@@ -272,6 +279,45 @@ const COLORS=['#e9b949','#e2725b','#7fd88b','#6fb7e8','#c58be0','#f08fb0','#f4ef
 let profile=store.get('golf.profile'); if(profile && (typeof profile.name!=='string' || !profile.pub)) profile=null;
 let games=store.get('golf.games'); if(!Array.isArray(games)) games=[];
 let myName=profile ? profile.name : '';
+/* ---------- COMPTES EN LIGNE (Firebase) : profils et parties terminées ---------- */
+const cloud=!!FIREBASE_CONFIG && typeof firebase!=='undefined';
+let auth=null, db=null, user=null, authReady=!cloud;
+function normGames(){ if(cloud && profile) games.forEach(g=>{ g.me=g.ps.findIndex(p=>p.pub===profile.pub); }); }
+function loadGames(){ if(!db || !user) return;
+  db.collection('games').orderBy('d','desc').limit(500).get().then(q=>{
+    games=q.docs.map(d=>Object.assign(d.data(),{gid:d.id})).filter(g=>Array.isArray(g.ps)).reverse(); normGames(); store.set('golf.games',games); if(!role) render();
+  }).catch(()=>{}); }
+function authErr(e){ const c=(e && e.code)||'';
+  if(/invalid-credential|wrong-password|user-not-found|invalid-login/.test(c)) return 'E-mail ou mot de passe incorrect';
+  if(/email-already-in-use/.test(c)) return 'Un compte existe déjà avec cet e-mail';
+  if(/weak-password/.test(c)) return 'Le mot de passe doit faire au moins 6 caractères';
+  if(/invalid-email/.test(c)) return 'Adresse e-mail invalide';
+  if(/network/.test(c)) return 'Pas de connexion internet';
+  if(/too-many-requests/.test(c)) return 'Trop de tentatives, réessaie dans quelques minutes';
+  return 'Erreur de connexion, réessaie'; }
+function initCloud(){
+  firebase.initializeApp(FIREBASE_CONFIG); auth=firebase.auth(); db=firebase.firestore();
+  if(profile && !profile.uid){ formAv=profile.av; formCol=profile.col; profile=null; games=[]; } // ancien profil local : sert à préremplir le nouveau
+  auth.onAuthStateChanged(u=>{ user=u;
+    if(!u){ authReady=true; profile=null; games=[]; if(role) leave(); else render(); return; }
+    if(profile && profile.uid!==u.uid){ profile=null; games=[]; }
+    db.collection('users').doc(u.uid).get().then(d=>{
+      if(d.exists){ const x=d.data(); profile={name:String(x.name||'Joueur').slice(0,14), av:x.av|0, col:x.col|0, created:x.created||Date.now(), pub:u.uid, uid:u.uid};
+        myName=profile.name; store.set('golf.profile',profile); }
+      authReady=true; loadGames(); if(!role) render();
+    }).catch(()=>{ authReady=true; if(!role) render(); });
+  });
+}
+function authHtml(){
+  return `<h1>Albatros<small>un Golf aux cartes, chacun sur son téléphone</small></h1>
+  <div class="panel stack"><h2>Connexion</h2>
+    <div><label>E-mail</label><input id="email" type="email" autocomplete="email" placeholder="toi@exemple.fr"></div>
+    <div><label>Mot de passe</label><input id="pw" type="password" autocomplete="current-password" placeholder="6 caractères minimum"></div>
+    <button data-act="signin">Se connecter</button>
+    <button class="ghost" data-act="signup">Créer un compte</button>
+    <button class="ghost small" data-act="resetpw">Mot de passe oublié ?</button></div>
+  <p class="muted center">Première fois ? Entre un e-mail et un mot de passe, puis touche « Créer un compte ».</p>`;
+}
 let page='home', ptab='stats', gsel=null, peek=null, formAv=profile?profile.av:0, formCol=profile?profile.col:0;
 let role=null, code='', S=null, V=null, me=0, peer=null, conn=null;
 let netOk=false, netMsg='', showScores=false, lastPong=0, lastTry=0, hostResume=false, hostOpened=false, hostTries=0;
@@ -317,14 +363,17 @@ function hostPeer(){
 }
 /* fiche publique d'un joueur, nettoyée avant d'entrer dans l'état partagé */
 function clean(x){ x=(x && typeof x==='object')?x:{}; const st=(x.stats && typeof x.stats==='object')?x.stats:{}, n=(v,max)=>Math.max(0,Math.min(max,Math.floor(Number(v))||0));
-  return { pub:/^[a-z0-9]{4,30}$/.test(x.pub)?x.pub:'', av:n(x.av,AVATARS.length-1), col:n(x.col,COLORS.length-1),
+  return { pub:/^[A-Za-z0-9]{4,40}$/.test(x.pub)?x.pub:'', av:n(x.av,AVATARS.length-1), col:n(x.col,COLORS.length-1),
     stats:{p:n(st.p,99999), w:n(st.w,99999), a:Math.round((Number(st.a)||0)*10)/10} }; }
 function myCard(){ const st=calc(); return { pub:profile.pub, av:profile.av, col:profile.col, stats:{p:st.played, w:st.wins, a:st.rounds?st.sum/st.rounds:0} }; }
 function maybeRecord(){
   if(!V || V.phase!=='gameOver' || !V.gid || !profile || games.some(g=>g.gid===V.gid)) return false;
   games.push({gid:V.gid, d:Date.now(), me, ps:V.players.map(p=>({pub:p.pub,name:p.name,av:p.av,col:p.col,total:p.total,cols:p.cols})), rounds:V.history});
-  if(games.length>300) games.shift();
-  store.set('golf.games',games); return true;
+  if(games.length>500) games.shift();
+  store.set('golf.games',games);
+  if(db && user){ const g=games[games.length-1], uids=g.ps.map(p=>p.pub).filter(x=>x);
+    if(uids.includes(user.uid)) db.collection('games').doc(g.gid).set(JSON.parse(JSON.stringify({d:g.d, ps:g.ps, rounds:g.rounds, uids}))).catch(()=>{}); } // si un autre joueur l'a déjà enregistrée, l'écriture est refusée : c'est voulu
+  return true;
 }
 function sendTo(c,m){ try{ if(c && c.open) c.send(m); }catch(e){} }
 function accept(c,d){
@@ -460,16 +509,16 @@ function calc(){
   const st={played:0,wins:0,streak:0,bestStreak:0,rounds:0,sum:0,bestRound:null,worstRound:null,bestTotal:null,worstTotal:null,cols:0,closer:0,pen:0,neg:0,h2h:{},board:{}};
   const lo=(a,b)=>a==null||b<a?b:a, hi=(a,b)=>a==null||b>a?b:a;
   for(const g of games){
-    if(!g || !Array.isArray(g.ps) || !g.ps[g.me]) continue;
-    const tot=g.ps.map(p=>p.total), mine=tot[g.me], won=mine===Math.min(...tot);
-    st.played++; if(won){ st.wins++; st.streak++; st.bestStreak=Math.max(st.bestStreak,st.streak); } else st.streak=0;
+    if(!g || !Array.isArray(g.ps)) continue;
+    const has=!!g.ps[g.me], tot=g.ps.map(p=>p.total), mine=tot[g.me], won=mine===Math.min(...tot);
+    if(has){ st.played++; if(won){ st.wins++; st.streak++; st.bestStreak=Math.max(st.bestStreak,st.streak); } else st.streak=0;
     st.bestTotal=lo(st.bestTotal,mine); st.worstTotal=hi(st.worstTotal,mine); st.cols+=g.ps[g.me].cols||0;
     (g.rounds||[]).forEach(r=>{ const s=r.scores[g.me]; st.rounds++; st.sum+=s; st.bestRound=lo(st.bestRound,s); st.worstRound=hi(st.worstRound,s); if(s<0) st.neg++;
-      if(r.closer===g.me){ st.closer++; if(r.penalized) st.pen++; } });
+      if(r.closer===g.me){ st.closer++; if(r.penalized) st.pen++; } }); }
     g.ps.forEach((p,j)=>{ const k=p.pub||('n:'+p.name);
-      const b=st.board[k]||(st.board[k]={g:0,w:0,rs:0,rn:0,me:j===g.me}); b.name=p.name; b.av=p.av; b.col=p.col; b.g++; if(tot[j]===Math.min(...tot)) b.w++;
+      const b=st.board[k]||(st.board[k]={g:0,w:0,rs:0,rn:0,me:has&&j===g.me}); b.name=p.name; b.av=p.av; b.col=p.col; b.g++; if(tot[j]===Math.min(...tot)) b.w++;
       (g.rounds||[]).forEach(r=>{ b.rs+=r.scores[j]; b.rn++; });
-      if(j!==g.me){ const e=st.h2h[k]||(st.h2h[k]={g:0,w:0,l:0}); e.name=p.name; e.av=p.av; e.col=p.col; e.g++; if(mine<tot[j]) e.w++; else if(mine>tot[j]) e.l++; } });
+      if(has && j!==g.me){ const e=st.h2h[k]||(st.h2h[k]={g:0,w:0,l:0}); e.name=p.name; e.av=p.av; e.col=p.col; e.g++; if(mine<tot[j]) e.w++; else if(mine>tot[j]) e.l++; } });
   }
   return st;
 }
@@ -495,7 +544,7 @@ function formHtml(){
     <div><label>Ta couleur</label><div class="pick sw">${COLORS.map((c,i)=>`<button class="${i===formCol?'on':''}" style="--c:${c}" data-act="pickCol" data-i="${i}" aria-label="Couleur ${i+1}"></button>`).join('')}</div></div>
     <button data-act="saveProfile">${edit?'Enregistrer':'Créer mon profil'}</button>
     ${edit?'<button class="ghost" data-act="home">Annuler</button>':''}</div>
-  <p class="muted center">Ton profil et tes statistiques sont enregistrés sur ce téléphone.</p>`;
+  <p class="muted center">${cloud?'Ton profil et tes statistiques sont enregistrés sur ton compte.':'Ton profil et tes statistiques sont enregistrés sur ce téléphone.'}</p>`;
 }
 function profileHtml(){
   const st=calc();
@@ -519,15 +568,16 @@ function profileHtml(){
     if(gsel!=null && games[gsel]){ const g=games[gsel];
       h+=`<div class="panel stack"><h2>Partie du ${dateFr(g.d)}</h2>${scoresTable(g.ps,g.rounds||[])}
         <div class="row"><button class="ghost" data-act="game" data-i="-1">Retour à la liste</button><button class="ghost" data-act="delGame" data-i="${gsel}">Supprimer</button></div></div>`;
-    } else if(!games.length) h+=`<div class="panel muted center">Aucune partie enregistrée pour l'instant.</div>`;
-    else h+=`<div class="stack">${games.map((g,i)=>{ const order=g.ps.map((p,j)=>j).sort((a,b)=>g.ps[a].total-g.ps[b].total), rk=order.indexOf(g.me)+1;
+    } else if(!games.some(g=>g.ps[g.me])) h+=`<div class="panel muted center">Aucune partie enregistrée pour l'instant.</div>`;
+    else h+=`<div class="stack">${games.map((g,i)=>{ if(!g.ps[g.me]) return ''; const order=g.ps.map((p,j)=>j).sort((a,b)=>g.ps[a].total-g.ps[b].total), rk=order.indexOf(g.me)+1;
       return `<div class="panel gitem" data-act="game" data-i="${i}"><div class="hd"><b>${dateFr(g.d)}</b><span class="tag">${g.ps[g.me].total===g.ps[order[0]].total?'Victoire':rk+'e sur '+g.ps.length}</span></div>
         <div class="muted">${order.map(j=>`${esc(g.ps[j].name)} ${g.ps[j].total}`).join(' · ')}</div></div>`; }).reverse().join('')}</div>`;
   } else {
     const bs=Object.values(st.board).sort((a,b)=> b.w-a.w || (a.rs/(a.rn||1))-(b.rs/(b.rn||1)));
     h+=`<div class="panel stack"><h2>Classement</h2>${bs.length?`<table><tr><th></th><th>Parties</th><th>Victoires</th><th>Moy. manche</th></tr>${bs.map((b,i)=>`<tr><td style="color:${colOf(b)}">${i+1}. ${AVATARS[b.av]||''} ${esc(b.name)}${b.me?' (toi)':''}</td><td>${b.g}</td><td>${b.w}</td><td>${b.rn?fmt(b.rs/b.rn):'-'}</td></tr>`).join('')}</table>`:'<div class="muted center">Aucune partie enregistrée pour l\'instant.</div>'}
-      <p class="muted">Classement calculé à partir des parties auxquelles tu as participé avec ce téléphone, trié par victoires puis par moyenne.</p></div>`;
+      <p class="muted">${cloud?'Classement commun à tous les joueurs, trié par victoires puis par moyenne.':'Classement calculé à partir des parties auxquelles tu as participé avec ce téléphone, trié par victoires puis par moyenne.'}</p></div>`;
   }
+  if(cloud && user) h+=`<button class="ghost small" data-act="signout">Se déconnecter (${esc(user.email||'')})</button>`;
   return h;
 }
 function scoresTable(ps,hist){
@@ -549,7 +599,9 @@ const RULES=`<details><summary>Règles du jeu</summary><ul>
 
 function render(){
   let h='';
-  if(!role && (!profile || page==='edit')) h=formHtml();
+  if(!role && cloud && authReady && !user) h=authHtml();
+  else if(!role && cloud && !authReady && !profile) h=`<h1>Albatros</h1><div class="panel muted center">Chargement...</div>`;
+  else if(!role && (!profile || page==='edit')) h=formHtml();
   else if(!role && page==='profile') h=profileHtml();
   else if(!role){
     const c=urlCode();
@@ -644,13 +696,22 @@ $app.addEventListener('click',ev=>{
     case 'pickCol': keepName(); formCol=i; render(); break;
     case 'saveProfile': keepName(); if(!myName){ toast('Choisis d\'abord un pseudo'); break; }
       profile={name:myName, av:formAv, col:formCol, pub:(profile&&profile.pub)||rid(), created:(profile&&profile.created)||Date.now()};
+      if(cloud && user){ profile.pub=profile.uid=user.uid; normGames();
+        db.collection('users').doc(user.uid).set({name:profile.name, av:profile.av, col:profile.col, created:profile.created}).catch(()=>toast('Profil non synchronisé, vérifie ta connexion')); }
       store.set('golf.profile',profile); page='home'; render(); break;
     case 'editProfile': formAv=profile.av; formCol=profile.col; page='edit'; render(); break;
     case 'profile': page='profile'; gsel=null; render(); break;
     case 'home': myName=profile.name; page= page==='edit' ? 'profile' : 'home'; render(); break;
     case 'tab': ptab=el.dataset.t; gsel=null; render(); break;
     case 'game': gsel= i<0 ? null : i; render(); break;
-    case 'delGame': if(el.dataset.sure){ games.splice(i,1); store.set('golf.games',games); gsel=null; render(); } else { el.dataset.sure=1; el.textContent='Confirmer ?'; } break;
+    case 'signin': case 'signup': { const em=(document.getElementById('email').value||'').trim(), pw=document.getElementById('pw').value||'';
+      if(!em || !pw){ toast('Entre ton e-mail et ton mot de passe'); break; }
+      if(a==='signup' && pw.length<6){ toast('Le mot de passe doit faire au moins 6 caractères'); break; }
+      (a==='signin' ? auth.signInWithEmailAndPassword(em,pw) : auth.createUserWithEmailAndPassword(em,pw)).catch(e=>toast(authErr(e))); break; }
+    case 'resetpw': { const em=(document.getElementById('email').value||'').trim(); if(!em){ toast('Entre d\'abord ton e-mail'); break; }
+      auth.sendPasswordResetEmail(em).then(()=>toast('E-mail de réinitialisation envoyé'),e=>toast(authErr(e))); break; }
+    case 'signout': if(el.dataset.sure){ store.del('golf.profile'); store.del('golf.games'); myName=''; page='home'; auth.signOut(); } else { el.dataset.sure=1; el.textContent='Confirmer la déconnexion ?'; } break;
+    case 'delGame': if(el.dataset.sure){ if(db && games[i]) db.collection('games').doc(games[i].gid).delete().catch(()=>toast('Suppression impossible')); games.splice(i,1); store.set('golf.games',games); gsel=null; render(); } else { el.dataset.sure=1; el.textContent='Confirmer ?'; } break;
     case 'peek': if(ev.target.closest('[data-act="kick"]')) break; peek=i; render(); break;
     case 'create': if(readName()) hostStart(newCode()); break;
     case 'join': { if(!readName()) break; const c=(document.getElementById('code').value||'').toUpperCase().replace(/[^A-Z]/g,'');
@@ -677,7 +738,8 @@ document.addEventListener('keydown',ev=>{ if(ev.key==='Enter' && !role){ const b
 /* ---------- DÉMARRAGE : reprise automatique après rechargement ---------- */
 (function boot(){
   const c=urlCode(), mark=tabCode.get()||''; // la reprise automatique ne vaut que pour l'onglet qui jouait déjà
-  if(c && mark.split(':')[0]===c && myName && typeof Peer!=='undefined'){
+  if(cloud) initCloud();
+  if(c && mark.split(':')[0]===c && profile && typeof Peer!=='undefined'){
     if(mark.split(':')[1]==='host'){ const saved=store.get('golf3.host.'+c); if(saved && saved.players && saved.players[0]){ hostStart(c,saved); return; } }
     else { clientStart(c); return; }
   }
