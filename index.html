@@ -54,6 +54,7 @@ button:disabled{opacity:.45;cursor:default}
 .card.red{color:var(--red)}
 .card .rk{font-size:40cqw}
 .card .su{font-size:34cqw;margin-top:4cqw}
+.card .pt{position:absolute;top:5%;left:7%;min-width:26cqw;padding:3cqw 2cqw;border-radius:20cqw;background:var(--black);color:var(--paper);font-size:17cqw;text-align:center;font-family:system-ui,sans-serif}
 .card .jk{font-size:17cqw;margin-top:6cqw;letter-spacing:.05em}
 .card.back{background:#7a2230;border:4px solid var(--paper);background-image:repeating-linear-gradient(60deg,rgba(255,255,255,.14) 0 2px,transparent 2px 9px),repeating-linear-gradient(-60deg,rgba(255,255,255,.14) 0 2px,transparent 2px 9px)}
 .card.empty{background:rgba(0,0,0,.18);border:2px dashed var(--line);box-shadow:none}
@@ -107,13 +108,13 @@ details li{margin-bottom:4px}
 <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
 
 <script id="engine">
-/* ================= MOTEUR DE JEU : Golf à 12 cartes, deux jeux de 52 cartes + 4 jokers (aucune dépendance au navigateur) ================= */
+/* ================= MOTEUR DE JEU : Golf à 12 cartes, trois jeux de 52 cartes + 6 jokers (aucune dépendance au navigateur) ================= */
 const Engine = (() => {
   const LIMIT=100, CELLS=12, COLS=4, PENALTY=10, MAXP=6;
   const rank = c => { const k=c%54; return k>=52 ? 0 : k%13+1; };   // 0 = joker, 1 = as ... 11 = valet, 12 = dame, 13 = roi
   const value = c => { const r=rank(c); return r===0?-2 : r===13?0 : r>10?10 : r; };
   function shuffle(a){ for(let i=a.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [a[i],a[j]]=[a[j],a[i]]; } return a; }
-  function makeDeck(){ const d=[]; for(let i=0;i<108;i++) d.push(i); return shuffle(d); }
+  function makeDeck(){ const d=[]; for(let i=0;i<162;i++) d.push(i); return shuffle(d); }
   function newGame(code){ return {code, phase:'lobby', players:[], deck:[], discard:[], turn:0, held:null, heldFrom:null, mustFlip:false,
     closer:null, finalLeft:0, round:0, history:[], starter:0, last:null, msg:''}; }
   function addPlayer(s,id,name){ s.players.push({id, name:String(name||'Joueur').slice(0,14), connected:true, grid:[], total:0}); }
@@ -404,9 +405,9 @@ const RANKS=['A','2','3','4','5','6','7','8','9','10','V','D','R'], SUITS=['♠'
 function cardHtml(c,extra,attrs){
   if(!c.up || c.c==null) return `<div class="card back ${extra||''}" ${attrs||''}></div>`;
   const k=c.c%54;
-  if(k>=52) return `<div class="card ${k===53?'red':''} ${extra||''}" ${attrs||''}><span class="rk">★</span><span class="jk">JOKER</span></div>`;
+  if(k>=52) return `<div class="card ${k===53?'red':''} ${extra||''}" ${attrs||''}><span class="rk">-2</span><span class="jk">JOKER</span></div>`;
   const s=Math.floor(k/13);
-  return `<div class="card ${s===1||s===2?'red':''} ${c.pair?'pair':''} ${extra||''}" ${attrs||''}><span class="rk">${RANKS[k%13]}</span><span class="su">${SUITS[s]}</span></div>`;
+  return `<div class="card ${s===1||s===2?'red':''} ${c.pair?'pair':''} ${extra||''}" ${attrs||''}>${k%13===0||k%13>9?`<span class="pt">${Engine.value(k)}</span>`:''}<span class="rk">${RANKS[k%13]}</span><span class="su">${SUITS[s]}</span></div>`;
 }
 function scoresTable(){
   const ps=V.players, best=Math.min(...ps.map(p=>p.total));
@@ -418,9 +419,9 @@ function scoresTable(){
   return h;
 }
 const RULES=`<details><summary>Règles du jeu</summary><ul>
-<li>Albatros est un Golf aux cartes, joué avec deux jeux de 52 cartes et 4 jokers. Chacun reçoit 12 cartes cachées (3 rangées de 4) et en retourne 2. Le but : avoir le moins de points possible.</li>
+<li>Albatros est un Golf aux cartes, joué avec trois jeux de 52 cartes et 6 jokers (162 cartes). Chacun reçoit 12 cartes cachées (3 rangées de 4) et en retourne 2. Le but : avoir le moins de points possible.</li>
 <li>À ton tour : prends la carte de la défausse (échange obligatoire avec une de tes cartes), ou pioche. Une carte piochée peut être échangée, ou jetée : tu retournes alors une de tes cartes cachées.</li>
-<li>Valeurs : as 1, cartes de 2 à 10 leur valeur, valet et dame 10, roi 0, joker -2.</li>
+<li>Valeurs : as 1, cartes de 2 à 10 leur valeur, valet et dame 10, roi 0, joker -2. Les points sont rappelés dans le coin des figures et de l'as.</li>
 <li>Trois cartes de même rang dans une colonne s'annulent : la colonne vaut 0 (sauf les jokers, qui gardent leur valeur).</li>
 <li>Quand un joueur a retourné toutes ses cartes, les autres jouent un dernier tour, puis tout est révélé. Si ce joueur n'a pas strictement le plus petit score de la manche, il prend 10 points de pénalité.</li>
 <li>La partie s'arrête dès qu'un joueur atteint 100 points. Le plus petit total gagne.</li></ul></details>`;
