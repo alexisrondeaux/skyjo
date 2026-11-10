@@ -96,6 +96,28 @@ td.best{color:var(--accent)}
 .modal .panel{background:#14483a;width:100%;max-width:480px;max-height:85dvh;overflow:auto}
 #toast{position:fixed;left:50%;bottom:22px;transform:translateX(-50%);background:#06180f;color:var(--ink);padding:9px 16px;border-radius:8px;font-weight:700;opacity:0;pointer-events:none;transition:opacity .2s;z-index:9;max-width:90vw;text-align:center}
 #toast.on{opacity:1}
+.av{display:inline-flex;align-items:center;justify-content:center;width:1.7em;height:1.7em;border-radius:50%;background:var(--c);flex:none;vertical-align:middle}
+.av.big{font-size:2.2rem}
+.pick{display:grid;grid-template-columns:repeat(6,1fr);gap:6px}
+.pick button{padding:6px 0;font-size:1.4rem;background:rgba(0,0,0,.2);border:2px solid transparent}
+.pick button.on{border-color:var(--accent)}
+.pick.sw{grid-template-columns:repeat(8,1fr)}
+.pick.sw button{aspect-ratio:1;border-radius:50%;background:var(--c);padding:0}
+.pick.sw button.on{border-color:#fff;box-shadow:0 0 0 2px rgba(0,0,0,.5)}
+.tabs{display:flex;gap:6px}
+.tabs button{flex:1;padding:8px 2px;font-size:.85rem}
+.stats{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.stat{background:rgba(0,0,0,.2);border-radius:8px;padding:8px 6px;text-align:center}
+.stat b{display:block;font-size:1.5rem;color:var(--accent)}
+.stat span{font-size:.8rem;color:var(--soft)}
+.troph{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.tr{background:rgba(0,0,0,.2);border-radius:8px;padding:10px 8px;text-align:center;opacity:.4;filter:grayscale(1)}
+.tr.on{opacity:1;filter:none;outline:1px solid var(--accent)}
+.tr .ic{font-size:1.8rem}
+.tr b{display:block}
+.tr span{font-size:.8rem;color:var(--soft)}
+.gitem{cursor:pointer}
+.gitem .hd{display:flex;justify-content:space-between;align-items:center;margin-bottom:4px}
 details{font-size:.95rem;color:var(--soft)}
 details summary{cursor:pointer;color:var(--ink);font-weight:700}
 details li{margin-bottom:4px}
@@ -117,7 +139,7 @@ const Engine = (() => {
   function makeDeck(){ const d=[]; for(let i=0;i<162;i++) d.push(i); return shuffle(d); }
   function newGame(code){ return {code, phase:'lobby', players:[], deck:[], discard:[], turn:0, held:null, heldFrom:null, mustFlip:false,
     closer:null, finalLeft:0, round:0, history:[], starter:0, last:null, msg:''}; }
-  function addPlayer(s,id,name){ s.players.push({id, name:String(name||'Joueur').slice(0,14), connected:true, grid:[], total:0}); }
+  function addPlayer(s,id,name,x){ s.players.push(Object.assign({id, name:String(name||'Joueur').slice(0,14), connected:true, grid:[], total:0, cols:0}, x||{})); }
   function startRound(s){
     s.round++; s.deck=makeDeck(); s.discard=[]; s.held=null; s.heldFrom=null; s.mustFlip=false; s.closer=null; s.finalLeft=0; s.last=null;
     for(const p of s.players){ p.grid=[]; for(let i=0;i<CELLS;i++) p.grid.push({c:s.deck.pop(), up:false}); }
@@ -135,7 +157,7 @@ const Engine = (() => {
     for(const p of s.players) p.grid.forEach(c=>c.up=true);
     const raw=s.players.map(score), scores=raw.slice(), c=s.closer; let penalized=false;
     if(c!=null && raw.some((v,i)=> i!==c && v<=raw[c])){ scores[c]+=PENALTY; penalized=true; }
-    s.players.forEach((p,i)=> p.total+=scores[i]);
+    s.players.forEach((p,i)=>{ p.total+=scores[i]; for(let k=0;k<COLS;k++) if(colDone(p,k)) p.cols=(p.cols||0)+1; });
     s.history.push({scores, closer:c, penalized});
     s.held=null; s.heldFrom=null; s.mustFlip=false; s.last=null;
     s.phase = s.players.some(p=>p.total>=LIMIT) ? 'gameOver' : 'roundEnd';
@@ -169,6 +191,7 @@ const Engine = (() => {
         if(!host) return 'Seul l\'hôte peut lancer la partie';
         if(s.phase!=='lobby') return 'La partie est déjà lancée';
         if(s.players.length<2) return 'Il faut au moins 2 joueurs';
+        s.gid=Math.random().toString(36).slice(2,10)+Date.now().toString(36); s.players.forEach(q=>q.cols=0);
         startRound(s); return null;
       case 'kick':
         if(!host || s.phase!=='lobby' || !(a.i>0) || !s.players[a.i]) return 'Action impossible';
@@ -178,7 +201,7 @@ const Engine = (() => {
         startRound(s); return null;
       case 'again':
         if(!host || s.phase!=='gameOver') return 'Action impossible';
-        s.players.forEach(q=>{ q.total=0; q.grid=[]; }); s.history=[]; s.round=0; s.phase='lobby'; s.msg=''; return null;
+        s.players.forEach(q=>{ q.total=0; q.grid=[]; q.cols=0; }); s.history=[]; s.round=0; s.phase='lobby'; s.msg=''; return null;
       case 'auto': {
         if(!host) return 'Action impossible';
         const t=s.players[a.i]; if(!t || t.connected) return 'Ce joueur est connecté';
@@ -220,10 +243,10 @@ const Engine = (() => {
   }
   /* Vue envoyée aux joueurs : cartes cachées et pioche retirées, identifiants secrets retirés */
   function view(s){
-    return { code:s.code, phase:s.phase, turn:s.turn, held:s.held, heldFrom:s.heldFrom, mustFlip:s.mustFlip, closer:s.closer,
+    return { code:s.code, gid:s.gid, phase:s.phase, turn:s.turn, held:s.held, heldFrom:s.heldFrom, mustFlip:s.mustFlip, closer:s.closer,
       round:s.round, history:s.history, last:s.last, msg:s.msg, deckCount:s.deck.length,
       discardTop: s.discard.length ? s.discard[s.discard.length-1] : null,
-      players: s.players.map(p=>({ name:p.name, connected:p.connected, total:p.total, sum:p.grid.length?score(p):0, ups:upCount(p),
+      players: s.players.map(p=>({ name:p.name, pub:p.pub, av:p.av, col:p.col, stats:p.stats, cols:p.cols||0, connected:p.connected, total:p.total, sum:p.grid.length?score(p):0, ups:upCount(p),
         grid:p.grid.map((c,i)=>({ c:c.up?c.c:null, up:c.up, pair:colDone(p,i%COLS) })) })) };
   }
   return {newGame, addPlayer, act, view, value, rank, MAXP};
@@ -233,7 +256,7 @@ if(typeof module!=='undefined') module.exports=Engine;
 
 <script>
 /* ================= RÉSEAU + INTERFACE ================= */
-const PREFIX='albatros-v2-';
+const PREFIX='albatros-v3-';
 const $app=document.getElementById('app'), $toast=document.getElementById('toast');
 const store={ get(k){ try{ return JSON.parse(localStorage.getItem(k)); }catch(e){ return null; } },
               set(k,v){ try{ localStorage.setItem(k,JSON.stringify(v)); }catch(e){} },
@@ -244,7 +267,12 @@ const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'
 const tab=k=>({ get(){ try{ return sessionStorage.getItem(k); }catch(e){ return null; } }, set(v){ try{ sessionStorage.setItem(k,v); }catch(e){} } });
 const tabPid=tab('golf.pid'), tabCode=tab('golf.code'); // propres à l'onglet
 let pid=tabPid.get() || store.get('golf.pid') || rid(); store.set('golf.pid',pid); tabPid.set(pid);
-let myName=store.get('golf.name') || '';
+const AVATARS=['🦊','🐼','🦁','🐸','🐙','🦉','🐢','🦄','🐝','🐧','🐳','🦖','🌵','🍀','⭐','🔥','⚡','🎲'];
+const COLORS=['#e9b949','#e2725b','#7fd88b','#6fb7e8','#c58be0','#f08fb0','#f4efe2','#f29b4c'];
+let profile=store.get('golf.profile'); if(profile && (typeof profile.name!=='string' || !profile.pub)) profile=null;
+let games=store.get('golf.games'); if(!Array.isArray(games)) games=[];
+let myName=profile ? profile.name : '';
+let page='home', ptab='stats', gsel=null, peek=null, formAv=profile?profile.av:0, formCol=profile?profile.col:0;
 let role=null, code='', S=null, V=null, me=0, peer=null, conn=null;
 let netOk=false, netMsg='', showScores=false, lastPong=0, lastTry=0, hostResume=false, hostOpened=false, hostTries=0;
 const conns=new Map(); // hôte : pid -> {conn, seen}
@@ -261,7 +289,7 @@ function hostStart(c, resume){
   if(noPeer()) return;
   role='host'; code=c; hostResume=!!resume; hostOpened=false; hostTries=0; me=0; tabCode.set(c+':host');
   if(resume){ S=resume; S.players.forEach((p,i)=>p.connected = i===0); pid=S.players[0].id; }
-  else { S=Engine.newGame(code); Engine.addPlayer(S,pid,myName); }
+  else { S=Engine.newGame(code); Engine.addPlayer(S,pid,myName,clean(myCard())); }
   setUrl(code);
   hostPeer(); broadcast();
 }
@@ -287,11 +315,22 @@ function hostPeer(){
     }
   });
 }
+/* fiche publique d'un joueur, nettoyée avant d'entrer dans l'état partagé */
+function clean(x){ x=(x && typeof x==='object')?x:{}; const st=(x.stats && typeof x.stats==='object')?x.stats:{}, n=(v,max)=>Math.max(0,Math.min(max,Math.floor(Number(v))||0));
+  return { pub:/^[a-z0-9]{4,30}$/.test(x.pub)?x.pub:'', av:n(x.av,AVATARS.length-1), col:n(x.col,COLORS.length-1),
+    stats:{p:n(st.p,99999), w:n(st.w,99999), a:Math.round((Number(st.a)||0)*10)/10} }; }
+function myCard(){ const st=calc(); return { pub:profile.pub, av:profile.av, col:profile.col, stats:{p:st.played, w:st.wins, a:st.rounds?st.sum/st.rounds:0} }; }
+function maybeRecord(){
+  if(!V || V.phase!=='gameOver' || !V.gid || !profile || games.some(g=>g.gid===V.gid)) return false;
+  games.push({gid:V.gid, d:Date.now(), me, ps:V.players.map(p=>({pub:p.pub,name:p.name,av:p.av,col:p.col,total:p.total,cols:p.cols})), rounds:V.history});
+  if(games.length>300) games.shift();
+  store.set('golf.games',games); return true;
+}
 function sendTo(c,m){ try{ if(c && c.open) c.send(m); }catch(e){} }
 function accept(c,d){
   const old=conns.get(d.pid); if(old && old.conn!==c){ try{ old.conn.close(); }catch(e){} }
   c.pid=d.pid; conns.set(d.pid,{conn:c,seen:Date.now()});
-  const pl=S.players.find(p=>p.id===d.pid); if(pl) pl.connected=true;
+  const pl=S.players.find(p=>p.id===d.pid); if(pl){ pl.connected=true; Object.assign(pl,clean(d.x)); }
   broadcast();
 }
 function hostData(c,d){
@@ -308,13 +347,14 @@ function hostData(c,d){
       } else accept(c,d);
     } else if(S.phase!=='lobby'){ sendTo(c,{t:'refused',m:'La partie a déjà commencé'}); }
     else if(S.players.length>=Engine.MAXP){ sendTo(c,{t:'refused',m:'La salle est complète ('+Engine.MAXP+' joueurs)'}); }
-    else { Engine.addPlayer(S,d.pid,d.name); accept(c,d); }
+    else { Engine.addPlayer(S,d.pid,d.name,clean(d.x)); accept(c,d); }
     return;
   }
   const e=conns.get(c.pid); if(!e || e.conn!==c) return;
   e.seen=Date.now();
   if(d.t==='ping') sendTo(c,{t:'pong'});
   else if(d.t==='alive'){ if(d.n===e.probe) e.alive=true; }
+  else if(d.t==='prof'){ const pl=S.players.find(p=>p.id===c.pid); if(pl){ Object.assign(pl,clean(d.x)); broadcast(); } }
   else if(d.t==='act'){
     const i=S.players.findIndex(p=>p.id===c.pid); if(i<1) return;
     if(['start','kick','next','again','auto'].includes(d.a && d.a.type)) return;
@@ -327,8 +367,9 @@ function hostDrop(c){
   if(pl && pl.connected){ pl.connected=false; broadcast(); }
 }
 function broadcast(){
-  store.set('golf2.host.'+code,S);
+  store.set('golf3.host.'+code,S);
   V=Engine.view(S); me=0;
+  if(maybeRecord()){ Object.assign(S.players[0],clean(myCard())); store.set('golf3.host.'+code,S); V=Engine.view(S); }
   S.players.forEach((p,i)=>{ if(i>0){ const e=conns.get(p.id); if(e) sendTo(e.conn,{t:'state',s:V,you:i}); } });
   render();
 }
@@ -360,17 +401,17 @@ function clientPeer(){
 function clientConnect(){
   lastTry=Date.now();
   const c=conn=peer.connect(PREFIX+code,{reliable:true,serialization:'json'});
-  c.on('open',()=>{ if(c!==conn) return; lastPong=Date.now(); sendTo(c,{t:'join',pid,name:myName}); });
+  c.on('open',()=>{ if(c!==conn) return; lastPong=Date.now(); sendTo(c,{t:'join',pid,name:myName,x:myCard()}); });
   c.on('data',d=>{ if(c===conn) clientData(d); });
   c.on('close',()=>{ if(c===conn){ netOk=false; netMsg='Connexion perdue, reconnexion...'; render(); } });
 }
 function clientData(d){
   if(!d || typeof d!=='object') return;
   lastPong=Date.now();
-  if(d.t==='state'){ V=d.s; me=d.you; netOk=true; render(); }
+  if(d.t==='state'){ V=d.s; me=d.you; netOk=true; if(maybeRecord()) sendTo(conn,{t:'prof',x:myCard()}); render(); }
   else if(d.t==='err') toast(d.m);
   else if(d.t==='probe') sendTo(conn,{t:'alive',n:d.n});
-  else if(d.t==='dup'){ pid=rid(); store.set('golf.pid',pid); tabPid.set(pid); sendTo(conn,{t:'join',pid,name:myName}); }
+  else if(d.t==='dup'){ pid=rid(); store.set('golf.pid',pid); tabPid.set(pid); sendTo(conn,{t:'join',pid,name:myName,x:myCard()}); }
   else if(d.t==='refused'){ const m=d.m; leave(true); toast(m); }
 }
 setInterval(()=>{
@@ -391,8 +432,8 @@ setInterval(()=>{
 document.addEventListener('visibilitychange',()=>{ if(!document.hidden){ lastTry=0; if(role==='host' && peer && peer.disconnected && !peer.destroyed){ try{ peer.reconnect(); }catch(e){} } } });
 
 function leave(silent){
-  if(role==='host') store.del('golf2.host.'+code);
-  tabCode.set(''); role=null; S=null; V=null; conns.clear(); showScores=false;
+  if(role==='host') store.del('golf3.host.'+code);
+  tabCode.set(''); role=null; S=null; V=null; conns.clear(); showScores=false; peek=null; page='home';
   try{ if(peer) peer.destroy(); }catch(e){} peer=null; conn=null; setUrl(''); code=''; render();
 }
 function send(a){
@@ -409,12 +450,92 @@ function cardHtml(c,extra,attrs){
   const s=Math.floor(k/13);
   return `<div class="card ${s===1||s===2?'red':''} ${c.pair?'pair':''} ${extra||''}" ${attrs||''}>${k%13===0||k%13>9?`<span class="pt">${Engine.value(k)}</span>`:''}<span class="rk">${RANKS[k%13]}</span><span class="su">${SUITS[s]}</span></div>`;
 }
-function scoresTable(){
-  const ps=V.players, best=Math.min(...ps.map(p=>p.total));
-  let h=`<table><tr><th></th>${ps.map(p=>`<th>${esc(p.name)}</th>`).join('')}</tr>`;
-  V.history.forEach((r,k)=>{ h+=`<tr><td>Manche ${k+1}</td>${r.scores.map((s,i)=>`<td>${s}${i===r.closer?(r.penalized?' <span class="tag">+10</span>':' ★'):''}</td>`).join('')}</tr>`; });
-  h+=`<tr class="tot"><td>Total</td>${ps.map(p=>`<td class="${p.total===best&&V.history.length?'best':''}">${p.total}</td>`).join('')}</tr></table>`;
-  if(!V.history.length) h+=`<p class="muted center">Aucune manche terminée pour l'instant.</p>`;
+const colOf=p=>COLORS[p && p.col] || COLORS[0];
+const avHtml=(p,big)=>`<span class="av ${big?'big':''}" style="--c:${colOf(p)}">${AVATARS[p && p.av] || AVATARS[0]}</span>`;
+const fmt=v=> v==null ? '-' : (Math.round(v*10)/10).toString().replace('.',',');
+const dateFr=d=>{ try{ return new Date(d).toLocaleDateString('fr-FR',{day:'numeric',month:'short',year:'numeric'}); }catch(e){ return ''; } };
+
+/* ---------- STATISTIQUES (calculées à partir des parties enregistrées sur ce téléphone) ---------- */
+function calc(){
+  const st={played:0,wins:0,streak:0,bestStreak:0,rounds:0,sum:0,bestRound:null,worstRound:null,bestTotal:null,worstTotal:null,cols:0,closer:0,pen:0,neg:0,h2h:{},board:{}};
+  const lo=(a,b)=>a==null||b<a?b:a, hi=(a,b)=>a==null||b>a?b:a;
+  for(const g of games){
+    if(!g || !Array.isArray(g.ps) || !g.ps[g.me]) continue;
+    const tot=g.ps.map(p=>p.total), mine=tot[g.me], won=mine===Math.min(...tot);
+    st.played++; if(won){ st.wins++; st.streak++; st.bestStreak=Math.max(st.bestStreak,st.streak); } else st.streak=0;
+    st.bestTotal=lo(st.bestTotal,mine); st.worstTotal=hi(st.worstTotal,mine); st.cols+=g.ps[g.me].cols||0;
+    (g.rounds||[]).forEach(r=>{ const s=r.scores[g.me]; st.rounds++; st.sum+=s; st.bestRound=lo(st.bestRound,s); st.worstRound=hi(st.worstRound,s); if(s<0) st.neg++;
+      if(r.closer===g.me){ st.closer++; if(r.penalized) st.pen++; } });
+    g.ps.forEach((p,j)=>{ const k=p.pub||('n:'+p.name);
+      const b=st.board[k]||(st.board[k]={g:0,w:0,rs:0,rn:0,me:j===g.me}); b.name=p.name; b.av=p.av; b.col=p.col; b.g++; if(tot[j]===Math.min(...tot)) b.w++;
+      (g.rounds||[]).forEach(r=>{ b.rs+=r.scores[j]; b.rn++; });
+      if(j!==g.me){ const e=st.h2h[k]||(st.h2h[k]={g:0,w:0,l:0}); e.name=p.name; e.av=p.av; e.col=p.col; e.g++; if(mine<tot[j]) e.w++; else if(mine>tot[j]) e.l++; } });
+  }
+  return st;
+}
+const TROPHIES=[
+  ['🎬','Premiers pas','Jouer une première partie',s=>s.played>=1],
+  ['🏆','Première victoire','Gagner une partie',s=>s.wins>=1],
+  ['🔟','Habitué','Jouer 10 parties',s=>s.played>=10],
+  ['💯','Pilier de table','Jouer 50 parties',s=>s.played>=50],
+  ['🔥','En feu','Gagner 3 parties de suite',s=>s.bestStreak>=3],
+  ['❄️','Sous zéro','Finir une manche avec un score négatif',s=>s.neg>=1],
+  ['🧱','Démolisseur','Annuler 10 colonnes',s=>s.cols>=10],
+  ['🏁','Sprinteur','Terminer 10 manches en premier',s=>s.closer>=10],
+  ['🎯','Sang-froid','Terminer 5 manches en premier sans pénalité',s=>s.closer-s.pen>=5],
+  ['🦅','Albatros','Gagner une partie avec moins de 40 points',s=>s.wins>=1&&games.some(g=>g.ps[g.me]&&g.ps[g.me].total<40&&g.ps[g.me].total===Math.min(...g.ps.map(p=>p.total)))],
+];
+const statBox=(v,l)=>`<div class="stat"><b>${v}</b><span>${l}</span></div>`;
+function formHtml(){
+  const edit=!!profile;
+  return `<h1>Albatros<small>${edit?'Modifier mon profil':'Bienvenue ! Crée ton profil pour jouer'}</small></h1>
+  <div class="panel stack"><div class="center">${avHtml({av:formAv,col:formCol},true)}</div>
+    <div><label>Ton pseudo</label><input id="name" maxlength="14" value="${esc(myName)}" placeholder="Pseudo" autocomplete="off"></div>
+    <div><label>Ton avatar</label><div class="pick">${AVATARS.map((a,i)=>`<button class="${i===formAv?'on':''}" data-act="pickAv" data-i="${i}">${a}</button>`).join('')}</div></div>
+    <div><label>Ta couleur</label><div class="pick sw">${COLORS.map((c,i)=>`<button class="${i===formCol?'on':''}" style="--c:${c}" data-act="pickCol" data-i="${i}" aria-label="Couleur ${i+1}"></button>`).join('')}</div></div>
+    <button data-act="saveProfile">${edit?'Enregistrer':'Créer mon profil'}</button>
+    ${edit?'<button class="ghost" data-act="home">Annuler</button>':''}</div>
+  <p class="muted center">Ton profil et tes statistiques sont enregistrés sur ce téléphone.</p>`;
+}
+function profileHtml(){
+  const st=calc();
+  let h=`<div class="top"><div class="grow">Mon profil</div><button class="ghost small" data-act="home">Retour</button></div>
+  <div class="panel row"><div style="flex:none">${avHtml(profile,true)}</div><div><div style="font-size:1.3rem;font-weight:700;color:${colOf(profile)}">${esc(profile.name)}</div><div class="muted">Joueur depuis le ${dateFr(profile.created)}</div></div><button class="ghost small" style="flex:none" data-act="editProfile">Modifier</button></div>
+  <div class="tabs">${[['stats','Stats'],['troph','Trophées'],['hist','Historique'],['rank','Classement']].map(t=>`<button class="small ${ptab===t[0]?'':'ghost'}" data-act="tab" data-t="${t[0]}">${t[1]}</button>`).join('')}</div>`;
+  if(ptab==='stats'){
+    if(!st.played) h+=`<div class="panel muted center">Aucune partie terminée pour l'instant. Tes statistiques apparaîtront ici après ta première partie.</div>`;
+    else {
+      h+=`<div class="panel stack"><h2>Parties et victoires</h2><div class="stats">${statBox(st.played,'parties jouées')}${statBox(st.wins,'victoires')}${statBox(Math.round(100*st.wins/st.played)+' %','de victoires')}${statBox(st.streak,'série en cours')}</div></div>
+      <div class="panel stack"><h2>Scores</h2><div class="stats">${statBox(fmt(st.sum/st.rounds),'moyenne par manche')}${statBox(st.bestRound,'meilleure manche')}${statBox(st.worstRound,'pire manche')}${statBox(st.worstTotal,'pire total de partie')}</div></div>
+      <div class="panel stack"><h2>Records personnels</h2><div class="stats">${statBox(st.bestTotal,'plus petit total')}${statBox(st.bestRound,'meilleure manche')}${statBox(st.bestStreak,'victoires de suite')}${statBox(st.rounds,'manches jouées')}</div></div>
+      <div class="panel stack"><h2>Style de jeu</h2><div class="stats">${statBox(st.cols,'colonnes annulées')}${statBox(st.closer,'manches terminées en premier')}${statBox(st.pen,'pénalités de 10 points')}${statBox(st.neg,'manches négatives')}</div></div>`;
+      const hs=Object.values(st.h2h).sort((a,b)=>b.g-a.g);
+      h+=`<div class="panel stack"><h2>Face à face</h2>${hs.length?`<ul class="plist">${hs.map(e=>`<li>${avHtml(e)}<span class="grow" style="color:${colOf(e)}">${esc(e.name)}</span><span class="muted">${e.g} partie${e.g>1?'s':''}</span><b>${e.w} - ${e.l}</b></li>`).join('')}</ul><p class="muted">Victoires - défaites : nombre de parties où tu as fini devant ou derrière ce joueur.</p>`:''}</div>`;
+    }
+  } else if(ptab==='troph'){
+    const n=TROPHIES.filter(t=>t[3](st)).length;
+    h+=`<div class="panel stack"><h2>Trophées (${n}/${TROPHIES.length})</h2><div class="troph">${TROPHIES.map(t=>`<div class="tr ${t[3](st)?'on':''}"><div class="ic">${t[0]}</div><b>${t[1]}</b><span>${t[2]}</span></div>`).join('')}</div></div>`;
+  } else if(ptab==='hist'){
+    if(gsel!=null && games[gsel]){ const g=games[gsel];
+      h+=`<div class="panel stack"><h2>Partie du ${dateFr(g.d)}</h2>${scoresTable(g.ps,g.rounds||[])}
+        <div class="row"><button class="ghost" data-act="game" data-i="-1">Retour à la liste</button><button class="ghost" data-act="delGame" data-i="${gsel}">Supprimer</button></div></div>`;
+    } else if(!games.length) h+=`<div class="panel muted center">Aucune partie enregistrée pour l'instant.</div>`;
+    else h+=`<div class="stack">${games.map((g,i)=>{ const order=g.ps.map((p,j)=>j).sort((a,b)=>g.ps[a].total-g.ps[b].total), rk=order.indexOf(g.me)+1;
+      return `<div class="panel gitem" data-act="game" data-i="${i}"><div class="hd"><b>${dateFr(g.d)}</b><span class="tag">${g.ps[g.me].total===g.ps[order[0]].total?'Victoire':rk+'e sur '+g.ps.length}</span></div>
+        <div class="muted">${order.map(j=>`${esc(g.ps[j].name)} ${g.ps[j].total}`).join(' · ')}</div></div>`; }).reverse().join('')}</div>`;
+  } else {
+    const bs=Object.values(st.board).sort((a,b)=> b.w-a.w || (a.rs/(a.rn||1))-(b.rs/(b.rn||1)));
+    h+=`<div class="panel stack"><h2>Classement</h2>${bs.length?`<table><tr><th></th><th>Parties</th><th>Victoires</th><th>Moy. manche</th></tr>${bs.map((b,i)=>`<tr><td style="color:${colOf(b)}">${i+1}. ${AVATARS[b.av]||''} ${esc(b.name)}${b.me?' (toi)':''}</td><td>${b.g}</td><td>${b.w}</td><td>${b.rn?fmt(b.rs/b.rn):'-'}</td></tr>`).join('')}</table>`:'<div class="muted center">Aucune partie enregistrée pour l\'instant.</div>'}
+      <p class="muted">Classement calculé à partir des parties auxquelles tu as participé avec ce téléphone, trié par victoires puis par moyenne.</p></div>`;
+  }
+  return h;
+}
+function scoresTable(ps,hist){
+  ps=ps||V.players; hist=hist||V.history; const best=Math.min(...ps.map(p=>p.total));
+  let h=`<table><tr><th></th>${ps.map(p=>`<th style="color:${colOf(p)}">${esc(p.name)}</th>`).join('')}</tr>`;
+  hist.forEach((r,k)=>{ h+=`<tr><td>Manche ${k+1}</td>${r.scores.map((s,i)=>`<td>${s}${i===r.closer?(r.penalized?' <span class="tag">+10</span>':' ★'):''}</td>`).join('')}</tr>`; });
+  h+=`<tr class="tot"><td>Total</td>${ps.map(p=>`<td class="${p.total===best&&hist.length?'best':''}">${p.total}</td>`).join('')}</tr></table>`;
+  if(!hist.length) h+=`<p class="muted center">Aucune manche terminée pour l'instant.</p>`;
   else h+=`<p class="muted">★ joueur qui a terminé la manche. +10 : pénalité car il n'avait pas strictement le plus petit score.</p>`;
   return h;
 }
@@ -428,10 +549,12 @@ const RULES=`<details><summary>Règles du jeu</summary><ul>
 
 function render(){
   let h='';
-  if(!role){
+  if(!role && (!profile || page==='edit')) h=formHtml();
+  else if(!role && page==='profile') h=profileHtml();
+  else if(!role){
     const c=urlCode();
     h=`<h1>Albatros<small>un Golf aux cartes, chacun sur son téléphone</small></h1>
-    <div class="panel stack"><div><label>Ton pseudo</label><input id="name" maxlength="14" value="${esc(myName)}" placeholder="Pseudo" autocomplete="off"></div></div>
+    <div class="panel row">${`<div style="flex:none">${avHtml(profile,true)}</div>`}<div style="font-size:1.25rem;font-weight:700;color:${colOf(profile)}">${esc(profile.name)}</div><button class="ghost small" style="flex:none" data-act="profile">Mon profil</button></div>
     <div class="panel stack"><h2>Rejoindre une partie</h2>
       <div class="row"><input id="code" class="code" maxlength="4" value="${esc(c)}" placeholder="CODE" autocomplete="off" autocapitalize="characters"><button data-act="join">Rejoindre</button></div></div>
     <div class="or">ou</div>
@@ -446,10 +569,13 @@ function render(){
     ${netOk?'':`<div class="net">${role==='host'?'Connexion au serveur...':esc(netMsg)}</div>`}
     <div class="panel stack center"><div class="muted">Code de la partie</div><div class="bigcode">${esc(V.code)}</div>
       <button data-act="share">Partager le lien d'invitation</button></div>
-    <div class="panel stack"><h2>Joueurs (${n}/${Engine.MAXP})</h2><ul class="plist">${V.players.map((p,i)=>`<li><span class="dot ${p.connected?'':'off'}"></span><span class="grow">${esc(p.name)}</span>${i===0?'<span class="tag">hôte</span>':''}${i===me?'<span class="tag">toi</span>':''}${role==='host'&&i>0?`<button class="ghost small" style="flex:none" data-act="kick" data-i="${i}">Retirer</button>`:''}</li>`).join('')}</ul>
-      ${role==='host'?`<button data-act="start" ${n<2?'disabled':''}>${n<2?'En attente de joueurs...':'Lancer la partie'}</button>`:`<div class="muted center">En attente du lancement par l'hôte...</div>`}</div>
+    <div class="panel stack"><h2>Joueurs (${n}/${Engine.MAXP})</h2><ul class="plist">${V.players.map((p,i)=>`<li data-act="peek" data-i="${i}" style="cursor:pointer"><span class="dot ${p.connected?'':'off'}"></span>${avHtml(p)}<span class="grow" style="color:${colOf(p)}">${esc(p.name)}</span>${i===0?'<span class="tag">hôte</span>':''}${i===me?'<span class="tag">toi</span>':''}${role==='host'&&i>0?`<button class="ghost small" style="flex:none" data-act="kick" data-i="${i}">Retirer</button>`:''}</li>`).join('')}</ul>
+      ${role==='host'?`<button data-act="start" ${n<2?'disabled':''}>${n<2?'En attente de joueurs...':'Lancer la partie'}</button>`:`<div class="muted center">En attente du lancement par l'hôte...</div>`}<div class="muted center">Touche un joueur pour voir son profil.</div></div>
     <div class="panel">${RULES}</div>`;
   } else h=gameHtml();
+  if(peek!=null && V && V.players[peek]){ const p=V.players[peek], s=p.stats||{p:0,w:0,a:0};
+    h+=`<div class="modal" data-act="closePeek"><div class="panel stack center"><div>${avHtml(p,true)}</div><h2 style="color:${colOf(p)}">${esc(p.name)}</h2>
+      <div class="stats">${statBox(s.p,'parties jouées')}${statBox(s.w,'victoires')}${statBox(s.p?Math.round(100*s.w/s.p)+' %':'-','de victoires')}${statBox(s.p?fmt(s.a):'-','moyenne par manche')}</div><button data-act="closePeek">Fermer</button></div></div>`; }
   if(showScores && V) h+=`<div class="modal" data-act="closeScores"><div class="panel stack"><h2>Scores</h2>${scoresTable()}<button data-act="closeScores">Fermer</button></div></div>`;
   $app.innerHTML=h;
 }
@@ -462,7 +588,7 @@ function gameHtml(){
   if(!netOk) h+=`<div class="net">${role==='host'?'Reconnexion au serveur...':esc(netMsg)}</div>`;
   h+=`<div class="opps">`;
   ps.forEach((p,i)=>{ if(i===me) return;
-    h+=`<div class="opp ${playing&&V.turn===i?'turn':''}"><div class="nm"><span class="dot ${p.connected?'':'off'}"></span><b>${esc(p.name)}</b><span>${p.sum}</span></div>
+    h+=`<div class="opp ${playing&&V.turn===i?'turn':''}"><div class="nm"><span class="dot ${p.connected?'':'off'}"></span>${avHtml(p)}<b style="color:${colOf(p)}">${esc(p.name)}</b><span>${p.sum}</span></div>
       <div class="grid">${p.grid.map((c,k)=>cardHtml(c, V.last&&V.last.p===i&&V.last.i===k&&!over?'last':'')).join('')}</div>
       <div class="muted center">Total ${p.total}</div></div>`; });
   h+=`</div>`;
@@ -495,7 +621,7 @@ function gameHtml(){
     }
   }
   const tapSetup=setup&&my.ups<2;
-  h+=`<div class="me ${myTurn?'turn':''}"><div class="hd"><span>${esc(my.name)} (toi)</span><span>Visible ${my.sum} · Total ${my.total}</span></div><div class="grid">`;
+  h+=`<div class="me ${myTurn?'turn':''}"><div class="hd"><span style="color:${colOf(my)}">${avHtml(my)} ${esc(my.name)} (toi)</span><span>Visible ${my.sum} · Total ${my.total}</span></div><div class="grid">`;
   my.grid.forEach((c,k)=>{
     let hint=false;
     if(!over){ if(tapSetup) hint=!c.up; else if(myTurn){ if(V.mustFlip) hint=!c.up; else if(held) hint=true; } }
@@ -506,17 +632,30 @@ function gameHtml(){
 }
 
 /* ---------- ÉVÉNEMENTS ---------- */
-function readName(){ const el=document.getElementById('name'); if(el){ myName=el.value.trim().slice(0,14); store.set('golf.name',myName); }
-  if(!myName){ toast('Choisis d\'abord un pseudo'); return false; } return true; }
+function readName(){ return !!profile; }
+function keepName(){ const el=document.getElementById('name'); if(el) myName=el.value.trim().slice(0,14); }
 $app.addEventListener('click',ev=>{
   const el=ev.target.closest('[data-act]'); if(!el) return;
   const a=el.dataset.act, i=el.dataset.i!=null?+el.dataset.i:null;
   if(a==='closeScores'){ if(ev.target===el){ showScores=false; render(); } return; }
+  if(a==='closePeek'){ if(ev.target===el){ peek=null; render(); } return; }
   switch(a){
+    case 'pickAv': keepName(); formAv=i; render(); break;
+    case 'pickCol': keepName(); formCol=i; render(); break;
+    case 'saveProfile': keepName(); if(!myName){ toast('Choisis d\'abord un pseudo'); break; }
+      profile={name:myName, av:formAv, col:formCol, pub:(profile&&profile.pub)||rid(), created:(profile&&profile.created)||Date.now()};
+      store.set('golf.profile',profile); page='home'; render(); break;
+    case 'editProfile': formAv=profile.av; formCol=profile.col; page='edit'; render(); break;
+    case 'profile': page='profile'; gsel=null; render(); break;
+    case 'home': myName=profile.name; page= page==='edit' ? 'profile' : 'home'; render(); break;
+    case 'tab': ptab=el.dataset.t; gsel=null; render(); break;
+    case 'game': gsel= i<0 ? null : i; render(); break;
+    case 'delGame': if(el.dataset.sure){ games.splice(i,1); store.set('golf.games',games); gsel=null; render(); } else { el.dataset.sure=1; el.textContent='Confirmer ?'; } break;
+    case 'peek': if(ev.target.closest('[data-act="kick"]')) break; peek=i; render(); break;
     case 'create': if(readName()) hostStart(newCode()); break;
     case 'join': { if(!readName()) break; const c=(document.getElementById('code').value||'').toUpperCase().replace(/[^A-Z]/g,'');
       if(c.length!==4){ toast('Le code fait 4 lettres'); break; }
-      const saved=store.get('golf2.host.'+c); if(saved && saved.players && saved.players[0]) hostStart(c,saved); else clientStart(c); break; }
+      const saved=store.get('golf3.host.'+c); if(saved && saved.players && saved.players[0]) hostStart(c,saved); else clientStart(c); break; }
     case 'leave': if(!V || V.phase==='lobby' || el.dataset.sure){ leave(); } else { el.dataset.sure=1; el.textContent='Confirmer ?'; } break;
     case 'share': { const u=shareUrl(), txt='Rejoins ma partie de Albatros (code '+code+')';
       if(navigator.share){ navigator.share({title:'Albatros',text:txt,url:u}).catch(()=>{}); }
@@ -539,7 +678,7 @@ document.addEventListener('keydown',ev=>{ if(ev.key==='Enter' && !role){ const b
 (function boot(){
   const c=urlCode(), mark=tabCode.get()||''; // la reprise automatique ne vaut que pour l'onglet qui jouait déjà
   if(c && mark.split(':')[0]===c && myName && typeof Peer!=='undefined'){
-    if(mark.split(':')[1]==='host'){ const saved=store.get('golf2.host.'+c); if(saved && saved.players && saved.players[0]){ hostStart(c,saved); return; } }
+    if(mark.split(':')[1]==='host'){ const saved=store.get('golf3.host.'+c); if(saved && saved.players && saved.players[0]){ hostStart(c,saved); return; } }
     else { clientStart(c); return; }
   }
   render();
