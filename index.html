@@ -1,0 +1,535 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<meta name="theme-color" content="#0f3d2e">
+<meta name="robots" content="noindex">
+<title>Neuf Trous</title>
+<style>
+:root{
+  --bg1:#0b2e22; --bg2:#17573f; --panel:rgba(255,255,255,.09); --ink:#f4efe2; --soft:rgba(244,239,226,.72);
+  --paper:#fbf7ec; --red:#c0392b; --black:#1d2320; --accent:#e9b949; --line:rgba(244,239,226,.2);
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;min-height:100%}
+html{background:#0f3d2e}
+body{font-family:Georgia,"Times New Roman",serif;color:var(--ink);
+  background:radial-gradient(ellipse at 50% 30%,var(--bg2),var(--bg1)) fixed;min-height:100dvh;user-select:none;-webkit-user-select:none}
+#app{max-width:520px;margin:0 auto;padding:10px 12px 24px;min-height:100dvh;display:flex;flex-direction:column;gap:10px}
+h1{font-size:2.5rem;margin:22px 0 0;text-align:center;line-height:1;font-weight:700;letter-spacing:.02em;color:var(--accent)}
+h1 small{display:block;font-size:1rem;font-weight:400;font-style:italic;color:var(--soft);margin-top:8px}
+h2{margin:0 0 6px;font-size:1.15rem}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px}
+label{display:block;font-size:.9rem;color:var(--soft);margin-bottom:4px}
+input{width:100%;font:inherit;font-size:1.15rem;padding:10px 12px;border-radius:8px;border:2px solid transparent;background:var(--paper);color:var(--black);outline:none;user-select:text;-webkit-user-select:text}
+input:focus{border-color:var(--accent)}
+input.code{text-transform:uppercase;letter-spacing:.3em;text-align:center;font-weight:700}
+button{font:inherit;font-weight:700;font-size:1.05rem;border:0;border-radius:8px;padding:12px 16px;cursor:pointer;color:#2a1f00;background:var(--accent)}
+button:active{filter:brightness(.9)}
+button.ghost{background:transparent;color:var(--ink);border:1px solid var(--line)}
+button.small{font-size:.9rem;padding:6px 12px}
+button:disabled{opacity:.45;cursor:default}
+.row{display:flex;gap:8px;align-items:center}
+.row>*{flex:1}
+.stack{display:flex;flex-direction:column;gap:10px}
+.or{text-align:center;color:var(--soft);font-size:.9rem;font-style:italic}
+.bigcode{font-size:3rem;font-weight:700;letter-spacing:.25em;text-align:center;line-height:1.1;color:var(--accent);user-select:text;-webkit-user-select:text}
+.plist{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px}
+.plist li{display:flex;align-items:center;gap:8px;background:rgba(0,0,0,.2);border-radius:8px;padding:8px 12px;font-size:1.1rem}
+.plist li .grow{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dot{width:10px;height:10px;border-radius:50%;background:#7fd88b;flex:none}
+.dot.off{background:#e2725b}
+.tag{font-size:.75rem;border:1px solid var(--line);border-radius:6px;padding:1px 7px}
+.muted{color:var(--soft);font-size:.9rem}
+.center{text-align:center}
+
+.top{display:flex;align-items:center;gap:8px}
+.top .grow{flex:1;font-weight:700}
+.net{background:#a8402f;border-radius:8px;padding:4px 10px;text-align:center;font-size:.9rem}
+
+/* cartes */
+.card{aspect-ratio:5/7;border-radius:9%;display:flex;flex-direction:column;align-items:center;justify-content:center;font-weight:700;position:relative;
+  background:var(--paper);color:var(--black);box-shadow:0 2px 5px rgba(0,0,0,.4);container-type:inline-size;line-height:1}
+.card.red{color:var(--red)}
+.card .rk{font-size:40cqw}
+.card .su{font-size:34cqw;margin-top:4cqw}
+.card.back{background:#7a2230;border:4px solid var(--paper);background-image:repeating-linear-gradient(60deg,rgba(255,255,255,.14) 0 2px,transparent 2px 9px),repeating-linear-gradient(-60deg,rgba(255,255,255,.14) 0 2px,transparent 2px 9px)}
+.card.empty{background:rgba(0,0,0,.18);border:2px dashed var(--line);box-shadow:none}
+.card.pair{opacity:.55}
+.card.tap{cursor:pointer}
+.card.hint{outline:3px solid var(--accent);outline-offset:2px;animation:glow 1.2s infinite}
+.card.last::after{content:"";position:absolute;top:6%;right:8%;width:14%;aspect-ratio:1;border-radius:50%;background:var(--accent);box-shadow:0 0 0 1px rgba(0,0,0,.4)}
+@keyframes glow{0%,100%{outline-color:var(--accent)}50%{outline-color:transparent}}
+@media (prefers-reduced-motion:reduce){.card.hint{animation:none}}
+.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+
+.opps{display:flex;gap:8px}
+.opp{flex:1;min-width:0;background:rgba(0,0,0,.2);border-radius:10px;padding:6px 8px;border:2px solid transparent}
+.opp.turn{border-color:var(--accent)}
+.opp .nm{display:flex;align-items:center;gap:5px;font-size:.9rem;font-weight:700;margin-bottom:5px}
+.opp .nm b{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.opp .grid{gap:4px;max-width:120px;margin:0 auto}
+.opp .card{box-shadow:0 1px 2px rgba(0,0,0,.4)}
+.opp .card.back{border-width:2px}
+
+.piles{display:flex;justify-content:center;gap:16px;align-items:flex-end}
+.pile{width:20%;max-width:80px;text-align:center}
+.pile .lbl{font-size:.75rem;color:var(--soft);margin-top:5px;line-height:1.1}
+.status{background:rgba(0,0,0,.28);border-radius:8px;padding:8px 12px;text-align:center;font-weight:700;font-size:1.05rem}
+.status.mine{background:var(--accent);color:#2a1f00}
+.status small{display:block;font-weight:400;font-style:italic;font-size:.85rem;opacity:.85}
+.me{background:rgba(0,0,0,.2);border-radius:10px;padding:10px;border:2px solid transparent}
+.me.turn{border-color:var(--accent)}
+.me .hd{display:flex;justify-content:space-between;font-weight:700;margin-bottom:8px}
+.me .grid{max-width:min(260px,40dvh);margin:0 auto;gap:10px}
+
+table{width:100%;border-collapse:collapse;font-size:1rem}
+th,td{padding:5px 4px;text-align:center;border-bottom:1px solid var(--line)}
+th{font-size:.85rem;max-width:80px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+td:first-child,th:first-child{text-align:left;color:var(--soft);font-size:.85rem}
+tr.tot td{font-weight:700;font-size:1.2rem;border-bottom:0}
+td.best{color:var(--accent)}
+.modal{position:fixed;inset:0;background:rgba(0,0,0,.65);display:flex;align-items:center;justify-content:center;padding:14px;z-index:5}
+.modal .panel{background:#14483a;width:100%;max-width:480px;max-height:85dvh;overflow:auto}
+#toast{position:fixed;left:50%;bottom:22px;transform:translateX(-50%);background:#06180f;color:var(--ink);padding:9px 16px;border-radius:8px;font-weight:700;opacity:0;pointer-events:none;transition:opacity .2s;z-index:9;max-width:90vw;text-align:center}
+#toast.on{opacity:1}
+details{font-size:.95rem;color:var(--soft)}
+details summary{cursor:pointer;color:var(--ink);font-weight:700}
+details li{margin-bottom:4px}
+</style>
+</head>
+<body>
+<div id="app"></div>
+<div id="toast"></div>
+
+<script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+
+<script id="engine">
+/* ================= MOTEUR DE JEU : Golf à 6 cartes, jeu de 52 cartes (aucune dépendance au navigateur) ================= */
+const Engine = (() => {
+  const ROUNDS=9, CELLS=6, COLS=3;
+  const rank = c => c%13+1;                 // 1 = as ... 11 = valet, 12 = dame, 13 = roi
+  const value = c => { const r=rank(c); return r===13?0 : r===2?-2 : r>10?10 : r; };
+  function shuffle(a){ for(let i=a.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [a[i],a[j]]=[a[j],a[i]]; } return a; }
+  function makeDeck(){ const d=[]; for(let i=0;i<52;i++) d.push(i); return shuffle(d); }
+  function newGame(code){ return {code, phase:'lobby', players:[], deck:[], discard:[], turn:0, held:null, heldFrom:null,
+    closer:null, finalLeft:0, round:0, history:[], starter:0, last:null, msg:''}; }
+  function addPlayer(s,id,name){ s.players.push({id, name:String(name||'Joueur').slice(0,14), connected:true, grid:[], total:0}); }
+  function startRound(s){
+    s.round++; s.deck=makeDeck(); s.discard=[]; s.held=null; s.heldFrom=null; s.closer=null; s.finalLeft=0; s.last=null;
+    for(const p of s.players){ p.grid=[]; for(let i=0;i<CELLS;i++) p.grid.push({c:s.deck.pop(), up:false}); }
+    s.discard.push(s.deck.pop()); s.starter=(s.round-1)%s.players.length; s.phase='setup'; s.msg='Chacun retourne 2 cartes';
+  }
+  const upCount = p => p.grid.filter(c=>c.up).length;
+  const allUp   = p => p.grid.every(c=>c.up);
+  const paired  = (p,col) => { const a=p.grid[col], b=p.grid[col+COLS]; return a.up && b.up && rank(a.c)===rank(b.c); };
+  function score(p){ let t=0;
+    for(let col=0;col<COLS;col++){ if(paired(p,col)) continue; const a=p.grid[col], b=p.grid[col+COLS]; if(a.up) t+=value(a.c); if(b.up) t+=value(b.c); }
+    return t; }
+  function endRound(s){
+    for(const p of s.players) p.grid.forEach(c=>c.up=true);
+    const scores=s.players.map(score);
+    s.players.forEach((p,i)=> p.total+=scores[i]);
+    s.history.push({scores, closer:s.closer});
+    s.held=null; s.heldFrom=null; s.last=null;
+    s.phase = s.round>=ROUNDS ? 'gameOver' : 'roundEnd';
+    s.msg='Fin du trou '+s.round;
+  }
+  function endTurn(s,pi){
+    const p=s.players[pi];
+    if(s.closer==null){ if(allUp(p)){ s.closer=pi; s.finalLeft=s.players.length-1; } }
+    else s.finalLeft--;
+    if(s.closer!=null && s.finalLeft<=0){ endRound(s); return; }
+    s.turn=(pi+1)%s.players.length;
+  }
+  function draw(s){
+    if(s.deck.length===0){ const top=s.discard.pop(); s.deck=shuffle(s.discard); s.discard=top==null?[]:[top]; }
+    return s.deck.pop();
+  }
+  function auto(s,t){
+    const p=s.players[t];
+    if(s.phase==='setup'){ while(upCount(p)<2){ const i=p.grid.findIndex(c=>!c.up); if(act(s,t,{type:'flipInit',i})) break; } return null; }
+    if(s.phase!=='play' || s.turn!==t) return 'Ce n\'est pas son tour';
+    if(s.held==null) act(s,t,{type:'drawDeck'});
+    let i=p.grid.findIndex(c=>!c.up); if(i<0) i=0;
+    return act(s,t,{type:'swap',i});
+  }
+  function act(s,pi,a){
+    const p=s.players[pi]; if(!p || !a) return 'Action invalide';
+    const host = pi===0, myTurn = s.phase==='play' && s.turn===pi;
+    const cell = () => (Number.isInteger(a.i) && a.i>=0 && a.i<CELLS) ? p.grid[a.i] : null;
+    switch(a.type){
+      case 'start':
+        if(!host) return 'Seul l\'hôte peut lancer la partie';
+        if(s.phase!=='lobby') return 'La partie est déjà lancée';
+        if(s.players.length<2) return 'Il faut au moins 2 joueurs';
+        startRound(s); return null;
+      case 'kick':
+        if(!host || s.phase!=='lobby' || !(a.i>0) || !s.players[a.i]) return 'Action impossible';
+        s.players.splice(a.i,1); return null;
+      case 'next':
+        if(!host || s.phase!=='roundEnd') return 'Action impossible';
+        startRound(s); return null;
+      case 'again':
+        if(!host || s.phase!=='gameOver') return 'Action impossible';
+        s.players.forEach(q=>{ q.total=0; q.grid=[]; }); s.history=[]; s.round=0; s.phase='lobby'; s.msg=''; return null;
+      case 'auto': {
+        if(!host) return 'Action impossible';
+        const t=s.players[a.i]; if(!t || t.connected) return 'Ce joueur est connecté';
+        return auto(s,a.i); }
+      case 'flipInit': {
+        if(s.phase!=='setup') return 'Action impossible';
+        if(upCount(p)>=2) return 'Tu as déjà retourné 2 cartes';
+        const c=cell(); if(!c || c.up) return 'Choisis une carte cachée';
+        c.up=true; s.last={p:pi,i:a.i};
+        if(s.players.every(q=>upCount(q)>=2)){ s.turn=s.starter; s.phase='play'; s.msg=s.players[s.turn].name+' commence'; }
+        return null; }
+      case 'drawDeck':
+        if(!myTurn) return 'Ce n\'est pas ton tour';
+        if(s.held!=null) return 'Tu as déjà pris une carte';
+        s.held=draw(s); s.heldFrom='deck'; s.msg=p.name+' pioche'; return null;
+      case 'takeDiscard':
+        if(!myTurn) return 'Ce n\'est pas ton tour';
+        if(s.held!=null) return 'Tu as déjà pris une carte';
+        if(!s.discard.length) return 'La défausse est vide';
+        s.held=s.discard.pop(); s.heldFrom='discard'; s.msg=p.name+' prend la défausse'; return null;
+      case 'swap': {
+        if(!myTurn || s.held==null) return 'Prends d\'abord une carte';
+        const c=cell(); if(!c) return 'Choisis une de tes cartes';
+        s.discard.push(c.c); c.c=s.held; c.up=true; s.held=null; s.heldFrom=null; s.last={p:pi,i:a.i};
+        s.msg=p.name+' échange une carte'; if(paired(p,a.i%COLS)) s.msg=p.name+' forme une paire !';
+        endTurn(s,pi); return null; }
+      case 'discardHeld':
+        if(!myTurn || s.held==null) return 'Action impossible';
+        if(s.heldFrom!=='deck') return 'Une carte prise à la défausse doit être échangée';
+        s.discard.push(s.held); s.held=null; s.heldFrom=null; s.last=null; s.msg=p.name+' défausse sa pioche';
+        endTurn(s,pi); return null;
+    }
+    return 'Action inconnue';
+  }
+  /* Vue envoyée aux joueurs : cartes cachées et pioche retirées, identifiants secrets retirés */
+  function view(s){
+    return { code:s.code, phase:s.phase, turn:s.turn, held:s.held, heldFrom:s.heldFrom, closer:s.closer,
+      round:s.round, rounds:ROUNDS, history:s.history, last:s.last, msg:s.msg, deckCount:s.deck.length,
+      discardTop: s.discard.length ? s.discard[s.discard.length-1] : null,
+      players: s.players.map(p=>({ name:p.name, connected:p.connected, total:p.total, sum:p.grid.length?score(p):0, ups:upCount(p),
+        grid:p.grid.map((c,i)=>({ c:c.up?c.c:null, up:c.up, pair:paired(p,i%COLS) })) })) };
+  }
+  return {newGame, addPlayer, act, view, value, rank};
+})();
+if(typeof module!=='undefined') module.exports=Engine;
+</script>
+
+<script>
+/* ================= RÉSEAU + INTERFACE ================= */
+const PREFIX='neuf-trous-v1-';
+const $app=document.getElementById('app'), $toast=document.getElementById('toast');
+const store={ get(k){ try{ return JSON.parse(localStorage.getItem(k)); }catch(e){ return null; } },
+              set(k,v){ try{ localStorage.setItem(k,JSON.stringify(v)); }catch(e){} },
+              del(k){ try{ localStorage.removeItem(k); }catch(e){} } };
+const rid=()=>Math.random().toString(36).slice(2,12)+Date.now().toString(36);
+const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+const tab=k=>({ get(){ try{ return sessionStorage.getItem(k); }catch(e){ return null; } }, set(v){ try{ sessionStorage.setItem(k,v); }catch(e){} } });
+const tabPid=tab('golf.pid'), tabCode=tab('golf.code'); // propres à l'onglet
+let pid=tabPid.get() || store.get('golf.pid') || rid(); store.set('golf.pid',pid); tabPid.set(pid);
+let myName=store.get('golf.name') || '';
+let role=null, code='', S=null, V=null, me=0, peer=null, conn=null;
+let netOk=false, netMsg='', showScores=false, lastPong=0, lastTry=0, hostResume=false, hostOpened=false, hostTries=0;
+const conns=new Map(); // hôte : pid -> {conn, seen}
+
+function toast(m){ $toast.textContent=m; $toast.classList.add('on'); clearTimeout(toast.t); toast.t=setTimeout(()=>$toast.classList.remove('on'),2200); }
+function urlCode(){ try{ return (new URLSearchParams(location.search).get('salle')||'').toUpperCase().replace(/[^A-Z]/g,'').slice(0,4); }catch(e){ return ''; } }
+function setUrl(c){ try{ history.replaceState(null,'', c ? '?salle='+c : location.pathname); }catch(e){} }
+function shareUrl(){ return location.origin+location.pathname+'?salle='+code; }
+function newCode(){ const A='ABCDEFGHJKLMNPQRSTUVWXYZ'; let c=''; for(let i=0;i<4;i++) c+=A[Math.floor(Math.random()*A.length)]; return c; }
+function noPeer(){ if(typeof Peer==='undefined'){ toast('Connexion internet requise (bibliothèque réseau non chargée)'); return true; } return false; }
+
+/* ---------- HÔTE ---------- */
+function hostStart(c, resume){
+  if(noPeer()) return;
+  role='host'; code=c; hostResume=!!resume; hostOpened=false; hostTries=0; me=0; tabCode.set(c+':host');
+  if(resume){ S=resume; S.players.forEach((p,i)=>p.connected = i===0); pid=S.players[0].id; }
+  else { S=Engine.newGame(code); Engine.addPlayer(S,pid,myName); }
+  setUrl(code);
+  hostPeer(); broadcast();
+}
+function hostPeer(){
+  netOk=false;
+  const p=peer=new Peer(PREFIX+code,{debug:0});
+  p.on('open',()=>{ if(p!==peer) return; netOk=true; hostResume=true; hostOpened=true; render(); });
+  p.on('connection',c=>{
+    c.on('data',d=>hostData(c,d));
+    c.on('close',()=>hostDrop(c)); c.on('error',()=>hostDrop(c));
+  });
+  p.on('disconnected',()=>{ if(p!==peer) return; netOk=false; render(); setTimeout(()=>{ if(p===peer && !p.destroyed){ try{ p.reconnect(); }catch(e){} } },1500); });
+  p.on('error',e=>{
+    if(p!==peer) return;
+    if(e.type==='unavailable-id'){
+      try{ p.destroy(); }catch(_){}
+      if(hostResume && !hostOpened && ++hostTries>=3){ // un autre onglet héberge déjà cette salle : on la rejoint comme invité
+        pid=rid(); store.set('golf.pid',pid); tabPid.set(pid); S=null; clientStart(code);
+      } else if(hostResume){ setTimeout(()=>{ if(role==='host' && p===peer) hostPeer(); },2500); }
+      else { code=newCode(); S.code=code; tabCode.set(code+':host'); setUrl(code); hostPeer(); broadcast(); }
+    } else if(['network','server-error','socket-error','socket-closed'].includes(e.type)){
+      netOk=false; render(); setTimeout(()=>{ if(role==='host' && p===peer){ try{ p.destroy(); }catch(_){} hostPeer(); } },3000);
+    }
+  });
+}
+function sendTo(c,m){ try{ if(c && c.open) c.send(m); }catch(e){} }
+function accept(c,d){
+  const old=conns.get(d.pid); if(old && old.conn!==c){ try{ old.conn.close(); }catch(e){} }
+  c.pid=d.pid; conns.set(d.pid,{conn:c,seen:Date.now()});
+  const pl=S.players.find(p=>p.id===d.pid); if(pl) pl.connected=true;
+  broadcast();
+}
+function hostData(c,d){
+  if(!d || typeof d!=='object' || role!=='host') return;
+  if(d.t==='join'){
+    if(typeof d.pid!=='string') return;
+    if(d.pid===S.players[0].id){ sendTo(c,{t:'dup'}); return; }
+    const pl=S.players.find(p=>p.id===d.pid);
+    if(pl){
+      const old=conns.get(d.pid);
+      if(old && old.conn!==c && old.conn.open){ // même identifiant déjà en ligne : vérifier si l'ancien répond encore
+        const n=rid(); old.probe=n; old.alive=false; sendTo(old.conn,{t:'probe',n});
+        setTimeout(()=>{ if(old.alive) sendTo(c,{t:'dup'}); else accept(c,d); },1500);
+      } else accept(c,d);
+    } else if(S.phase!=='lobby'){ sendTo(c,{t:'refused',m:'La partie a déjà commencé'}); }
+    else if(S.players.length>=4){ sendTo(c,{t:'refused',m:'La salle est complète (4 joueurs)'}); }
+    else { Engine.addPlayer(S,d.pid,d.name); accept(c,d); }
+    return;
+  }
+  const e=conns.get(c.pid); if(!e || e.conn!==c) return;
+  e.seen=Date.now();
+  if(d.t==='ping') sendTo(c,{t:'pong'});
+  else if(d.t==='alive'){ if(d.n===e.probe) e.alive=true; }
+  else if(d.t==='act'){
+    const i=S.players.findIndex(p=>p.id===c.pid); if(i<1) return;
+    if(['start','kick','next','again','auto'].includes(d.a && d.a.type)) return;
+    const err=Engine.act(S,i,d.a); if(err) sendTo(c,{t:'err',m:err}); else broadcast();
+  }
+}
+function hostDrop(c){
+  const e=conns.get(c.pid); if(!e || e.conn!==c) return;
+  conns.delete(c.pid); const pl=S && S.players.find(p=>p.id===c.pid);
+  if(pl && pl.connected){ pl.connected=false; broadcast(); }
+}
+function broadcast(){
+  store.set('golf.host.'+code,S);
+  V=Engine.view(S); me=0;
+  S.players.forEach((p,i)=>{ if(i>0){ const e=conns.get(p.id); if(e) sendTo(e.conn,{t:'state',s:V,you:i}); } });
+  render();
+}
+function hostKick(i){
+  const p=S.players[i]; if(!p) return; const e=conns.get(p.id);
+  if(Engine.act(S,0,{type:'kick',i})) return;
+  if(e){ sendTo(e.conn,{t:'refused',m:'L\'hôte t\'a retiré de la salle'}); conns.delete(p.id); setTimeout(()=>{ try{ e.conn.close(); }catch(_){} },300); }
+  broadcast();
+}
+
+/* ---------- INVITÉ ---------- */
+function clientStart(c){
+  if(noPeer()) return;
+  role='client'; code=c; V=null; netOk=false; tabCode.set(c+':client'); netMsg='Connexion à la salle...';
+  setUrl(code);
+  clientPeer(); render();
+}
+function clientPeer(){
+  lastTry=Date.now();
+  try{ if(peer) peer.destroy(); }catch(e){}
+  const p=peer=new Peer({debug:0});
+  p.on('open',()=>{ if(p===peer) clientConnect(); });
+  p.on('disconnected',()=>{ if(p===peer && !p.destroyed){ try{ p.reconnect(); }catch(e){} } });
+  p.on('error',e=>{
+    if(p!==peer) return;
+    if(e.type==='peer-unavailable'){ netOk=false; netMsg = V ? 'Hôte injoignable, nouvelle tentative...' : 'Salle '+code+' introuvable pour l\'instant, nouvelle tentative...'; render(); }
+  });
+}
+function clientConnect(){
+  lastTry=Date.now();
+  const c=conn=peer.connect(PREFIX+code,{reliable:true,serialization:'json'});
+  c.on('open',()=>{ if(c!==conn) return; lastPong=Date.now(); sendTo(c,{t:'join',pid,name:myName}); });
+  c.on('data',d=>{ if(c===conn) clientData(d); });
+  c.on('close',()=>{ if(c===conn){ netOk=false; netMsg='Connexion perdue, reconnexion...'; render(); } });
+}
+function clientData(d){
+  if(!d || typeof d!=='object') return;
+  lastPong=Date.now();
+  if(d.t==='state'){ V=d.s; me=d.you; netOk=true; render(); }
+  else if(d.t==='err') toast(d.m);
+  else if(d.t==='probe') sendTo(conn,{t:'alive',n:d.n});
+  else if(d.t==='dup'){ pid=rid(); store.set('golf.pid',pid); tabPid.set(pid); sendTo(conn,{t:'join',pid,name:myName}); }
+  else if(d.t==='refused'){ const m=d.m; leave(true); toast(m); }
+}
+setInterval(()=>{
+  const now=Date.now();
+  if(role==='client'){
+    if(conn && conn.open) sendTo(conn,{t:'ping'});
+    const stale = !conn || !conn.open || now-lastPong>12000;
+    if(stale && now-lastTry>5000){
+      if(netOk){ netOk=false; netMsg='Connexion perdue, reconnexion...'; render(); }
+      if(!peer || peer.destroyed || peer.disconnected || now-lastPong>30000) clientPeer(); else clientConnect();
+    }
+  } else if(role==='host' && S){
+    let ch=false;
+    S.players.forEach((p,i)=>{ if(i>0 && p.connected){ const e=conns.get(p.id); if(!e || !e.conn.open || now-e.seen>12000){ p.connected=false; ch=true; } } });
+    if(ch) broadcast();
+  }
+},4000);
+document.addEventListener('visibilitychange',()=>{ if(!document.hidden){ lastTry=0; if(role==='host' && peer && peer.disconnected && !peer.destroyed){ try{ peer.reconnect(); }catch(e){} } } });
+
+function leave(silent){
+  if(role==='host') store.del('golf.host.'+code);
+  tabCode.set(''); role=null; S=null; V=null; conns.clear(); showScores=false;
+  try{ if(peer) peer.destroy(); }catch(e){} peer=null; conn=null; setUrl(''); code=''; render();
+}
+function send(a){
+  if(role==='host'){ const e=Engine.act(S,0,a); if(e) toast(e); else broadcast(); }
+  else if(conn && conn.open) sendTo(conn,{t:'act',a}); else toast('Reconnexion en cours...');
+}
+
+/* ---------- RENDU ---------- */
+const RANKS=['A','2','3','4','5','6','7','8','9','10','V','D','R'], SUITS=['♠','♥','♦','♣'];
+function cardHtml(c,extra,attrs){
+  if(!c.up || c.c==null) return `<div class="card back ${extra||''}" ${attrs||''}></div>`;
+  const s=Math.floor(c.c/13);
+  return `<div class="card ${s===1||s===2?'red':''} ${c.pair?'pair':''} ${extra||''}" ${attrs||''}><span class="rk">${RANKS[c.c%13]}</span><span class="su">${SUITS[s]}</span></div>`;
+}
+function scoresTable(){
+  const ps=V.players, best=Math.min(...ps.map(p=>p.total));
+  let h=`<table><tr><th></th>${ps.map(p=>`<th>${esc(p.name)}</th>`).join('')}</tr>`;
+  V.history.forEach((r,k)=>{ h+=`<tr><td>Trou ${k+1}</td>${r.scores.map((s,i)=>`<td>${s}${i===r.closer?' ★':''}</td>`).join('')}</tr>`; });
+  h+=`<tr class="tot"><td>Total</td>${ps.map(p=>`<td class="${p.total===best&&V.history.length?'best':''}">${p.total}</td>`).join('')}</tr></table>`;
+  if(!V.history.length) h+=`<p class="muted center">Aucun trou terminé pour l'instant.</p>`;
+  else h+=`<p class="muted">★ joueur qui a retourné toutes ses cartes en premier.</p>`;
+  return h;
+}
+const RULES=`<details><summary>Règles du jeu</summary><ul>
+<li>Le Golf se joue avec un jeu de 52 cartes. Chacun reçoit 6 cartes cachées (2 rangées de 3) et en retourne 2. Le but : avoir le moins de points possible.</li>
+<li>À ton tour : prends la carte de la défausse (échange obligatoire avec une de tes cartes), ou pioche. Une carte piochée peut être échangée avec une de tes cartes, ou jetée : ton tour s'arrête alors.</li>
+<li>Valeurs : as 1, cartes de 3 à 10 leur valeur, valet et dame 10, roi 0, et le 2 vaut -2.</li>
+<li>Deux cartes de même rang l'une au-dessus de l'autre s'annulent : la colonne vaut 0.</li>
+<li>Quand un joueur a retourné toutes ses cartes, les autres jouent un dernier tour, puis tout est révélé.</li>
+<li>La partie se joue en 9 trous (manches). Le plus petit total gagne.</li></ul></details>`;
+
+function render(){
+  let h='';
+  if(!role){
+    const c=urlCode();
+    h=`<h1>Neuf Trous<small>le Golf aux cartes, chacun sur son téléphone</small></h1>
+    <div class="panel stack"><div><label>Ton pseudo</label><input id="name" maxlength="14" value="${esc(myName)}" placeholder="Pseudo" autocomplete="off"></div></div>
+    <div class="panel stack"><h2>Rejoindre une partie</h2>
+      <div class="row"><input id="code" class="code" maxlength="4" value="${esc(c)}" placeholder="CODE" autocomplete="off" autocapitalize="characters"><button data-act="join">Rejoindre</button></div></div>
+    <div class="or">ou</div>
+    <button data-act="create">Créer une partie</button>
+    <div class="panel">${RULES}</div>`;
+  } else if(!V){
+    h=`<h1>Neuf Trous</h1><div class="panel stack center"><div class="bigcode">${esc(code)}</div><div>${esc(netMsg)}</div>
+      <div class="muted">L'hôte doit garder la page ouverte sur son téléphone.</div><button class="ghost" data-act="leave">Annuler</button></div>`;
+  } else if(V.phase==='lobby'){
+    const n=V.players.length;
+    h=`<div class="top"><div class="grow">Salle d'attente</div><button class="ghost small" data-act="leave">Quitter</button></div>
+    ${netOk?'':`<div class="net">${role==='host'?'Connexion au serveur...':esc(netMsg)}</div>`}
+    <div class="panel stack center"><div class="muted">Code de la partie</div><div class="bigcode">${esc(V.code)}</div>
+      <button data-act="share">Partager le lien d'invitation</button></div>
+    <div class="panel stack"><h2>Joueurs (${n}/4)</h2><ul class="plist">${V.players.map((p,i)=>`<li><span class="dot ${p.connected?'':'off'}"></span><span class="grow">${esc(p.name)}</span>${i===0?'<span class="tag">hôte</span>':''}${i===me?'<span class="tag">toi</span>':''}${role==='host'&&i>0?`<button class="ghost small" style="flex:none" data-act="kick" data-i="${i}">Retirer</button>`:''}</li>`).join('')}</ul>
+      ${role==='host'?`<button data-act="start" ${n<2?'disabled':''}>${n<2?'En attente de joueurs...':'Lancer la partie'}</button>`:`<div class="muted center">En attente du lancement par l'hôte...</div>`}</div>
+    <div class="panel">${RULES}</div>`;
+  } else h=gameHtml();
+  if(showScores && V) h+=`<div class="modal" data-act="closeScores"><div class="panel stack"><h2>Scores</h2>${scoresTable()}<button data-act="closeScores">Fermer</button></div></div>`;
+  $app.innerHTML=h;
+}
+
+function gameHtml(){
+  const ps=V.players, my=ps[me], cur=ps[V.turn], playing=V.phase==='play', setup=V.phase==='setup', over=V.phase==='roundEnd'||V.phase==='gameOver';
+  const myTurn=playing && V.turn===me, held=V.held!=null;
+  let h=`<div class="top"><div class="grow">Trou ${V.round}/${V.rounds} <span class="muted">· ${esc(V.code)}</span></div>
+    <button class="ghost small" data-act="scores">Scores</button><button class="ghost small" data-act="leave">Quitter</button></div>`;
+  if(!netOk) h+=`<div class="net">${role==='host'?'Reconnexion au serveur...':esc(netMsg)}</div>`;
+  h+=`<div class="opps">`;
+  ps.forEach((p,i)=>{ if(i===me) return;
+    h+=`<div class="opp ${playing&&V.turn===i?'turn':''}"><div class="nm"><span class="dot ${p.connected?'':'off'}"></span><b>${esc(p.name)}</b><span>${p.sum}</span></div>
+      <div class="grid">${p.grid.map((c,k)=>cardHtml(c, V.last&&V.last.p===i&&V.last.i===k&&!over?'last':'')).join('')}</div>
+      <div class="muted center">Total ${p.total}</div></div>`; });
+  h+=`</div>`;
+  if(over){
+    const best=Math.min(...ps.map(p=>p.total));
+    const winners=ps.filter(p=>p.total===best).map(p=>p.name);
+    h+=`<div class="panel stack"><h2>${V.phase==='gameOver'?'Partie terminée : '+esc(winners.join(' et '))+(winners.length>1?' gagnent !':' gagne !'):'Fin du trou '+V.round}</h2>
+      ${scoresTable()}
+      ${role==='host'?`<button data-act="${V.phase==='gameOver'?'again':'next'}">${V.phase==='gameOver'?'Nouvelle partie':'Trou suivant'}</button>`:`<div class="muted center">En attente de l'hôte...</div>`}</div>`;
+  } else {
+    const canDraw=myTurn&&!held, canDiscard=myTurn&&held&&V.heldFrom==='deck';
+    h+=`<div class="piles">
+      <div class="pile"><div class="card back ${canDraw?'tap hint':''}" data-act="deck"></div><div class="lbl">Pioche (${V.deckCount})</div></div>
+      <div class="pile">${V.discardTop==null?`<div class="card empty ${canDiscard?'tap hint':''}" data-act="discard"></div>`:cardHtml({c:V.discardTop,up:true},(canDraw||canDiscard)?'tap hint':'','data-act="discard"')}<div class="lbl">${canDiscard?'Jeter ici':'Défausse'}</div></div>
+      <div class="pile">${held?cardHtml({c:V.held,up:true}):`<div class="card empty"></div>`}<div class="lbl">${held?'En main : '+esc(cur.name):'En main'}</div></div>
+    </div>`;
+    let st='', sub=V.closer!=null?`Dernier tour ! ${esc(ps[V.closer].name)} a tout retourné.`:'', mine=false;
+    if(setup){ if(my.ups<2){ st=`Retourne ${2-my.ups} carte${my.ups?'':'s'} de ton jeu`; mine=true; } else st='En attente des autres joueurs...'; }
+    else if(myTurn){ mine=true;
+      if(!held) st='À toi ! Pioche ou prends la défausse';
+      else if(V.heldFrom==='discard') st='Touche la carte à remplacer';
+      else st='Remplace une de tes cartes, ou jette-la sur la défausse';
+    } else { st=`Au tour de ${esc(cur.name)}`; if(!sub) sub=esc(V.msg||''); }
+    h+=`<div class="status ${mine?'mine':''}">${st}${sub?`<small>${sub}</small>`:''}</div>`;
+    if(role==='host'){
+      const t = setup ? ps.findIndex(p=>!p.connected&&p.ups<2) : (!cur.connected?V.turn:-1);
+      if(t>0) h+=`<button class="ghost small" data-act="auto" data-i="${t}">${esc(ps[t].name)} est déconnecté : jouer à sa place</button>`;
+    }
+  }
+  const tapSetup=setup&&my.ups<2;
+  h+=`<div class="me ${myTurn?'turn':''}"><div class="hd"><span>${esc(my.name)} (toi)</span><span>Visible ${my.sum} · Total ${my.total}</span></div><div class="grid">`;
+  my.grid.forEach((c,k)=>{
+    let hint=false;
+    if(!over){ if(tapSetup) hint=!c.up; else if(myTurn&&held) hint=true; }
+    h+=cardHtml(c,(hint?'tap hint ':'')+(V.last&&V.last.p===me&&V.last.i===k&&!over?'last':''),`data-act="card" data-i="${k}"`);
+  });
+  h+=`</div></div>`;
+  return h;
+}
+
+/* ---------- ÉVÉNEMENTS ---------- */
+function readName(){ const el=document.getElementById('name'); if(el){ myName=el.value.trim().slice(0,14); store.set('golf.name',myName); }
+  if(!myName){ toast('Choisis d\'abord un pseudo'); return false; } return true; }
+$app.addEventListener('click',ev=>{
+  const el=ev.target.closest('[data-act]'); if(!el) return;
+  const a=el.dataset.act, i=el.dataset.i!=null?+el.dataset.i:null;
+  if(a==='closeScores'){ if(ev.target===el){ showScores=false; render(); } return; }
+  switch(a){
+    case 'create': if(readName()) hostStart(newCode()); break;
+    case 'join': { if(!readName()) break; const c=(document.getElementById('code').value||'').toUpperCase().replace(/[^A-Z]/g,'');
+      if(c.length!==4){ toast('Le code fait 4 lettres'); break; }
+      const saved=store.get('golf.host.'+c); if(saved && saved.players && saved.players[0]) hostStart(c,saved); else clientStart(c); break; }
+    case 'leave': if(!V || V.phase==='lobby' || el.dataset.sure){ leave(); } else { el.dataset.sure=1; el.textContent='Confirmer ?'; } break;
+    case 'share': { const u=shareUrl(), txt='Rejoins ma partie de Neuf Trous (code '+code+')';
+      if(navigator.share){ navigator.share({title:'Neuf Trous',text:txt,url:u}).catch(()=>{}); }
+      else if(navigator.clipboard){ navigator.clipboard.writeText(u).then(()=>toast('Lien copié'),()=>toast(u)); } else toast(u); break; }
+    case 'kick': hostKick(i); break;
+    case 'start': case 'next': case 'again': send({type:a}); break;
+    case 'auto': send({type:'auto',i}); break;
+    case 'scores': showScores=true; render(); break;
+    case 'deck': if(V.phase==='play'&&V.turn===me&&V.held==null) send({type:'drawDeck'}); break;
+    case 'discard': if(V.phase==='play'&&V.turn===me){ if(V.held==null) send({type:'takeDiscard'}); else if(V.heldFrom==='deck') send({type:'discardHeld'}); } break;
+    case 'card':
+      if(V.phase==='setup') send({type:'flipInit',i});
+      else if(V.phase==='play'&&V.turn===me){ if(V.held!=null) send({type:'swap',i}); else toast('Prends d\'abord la pioche ou la défausse'); }
+      break;
+  }
+});
+document.addEventListener('keydown',ev=>{ if(ev.key==='Enter' && !role){ const b=$app.querySelector(urlCode()||(document.getElementById('code')||{}).value?'[data-act="join"]':'[data-act="create"]'); if(b) b.click(); } });
+
+/* ---------- DÉMARRAGE : reprise automatique après rechargement ---------- */
+(function boot(){
+  const c=urlCode(), mark=tabCode.get()||''; // la reprise automatique ne vaut que pour l'onglet qui jouait déjà
+  if(c && mark.split(':')[0]===c && myName && typeof Peer!=='undefined'){
+    if(mark.split(':')[1]==='host'){ const saved=store.get('golf.host.'+c); if(saved && saved.players && saved.players[0]){ hostStart(c,saved); return; } }
+    else { clientStart(c); return; }
+  }
+  render();
+})();
+</script>
+</body>
+</html>
